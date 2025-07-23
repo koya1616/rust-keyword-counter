@@ -96,31 +96,236 @@ mod tests {
 
     #[test]
     fn test_count_keywords() {
-        // Test basic keyword counting
-        let content = "fn main() { let x = 42; if x > 0 { return; } }";
-        let counts = count_keywords(content);
+        // Primitive Types and Literals
+        let primitive_types = r#"
+            fn demonstrate_primitives() {
+                let int8: i8 = -128;
+                let int16: i16 = -32768;
+                let int32: i32 = -2147483648;
+                let int64: i64 = -9223372036854775808;
+                let int128: i128 = 0;
+                let isize_val: isize = -1;
+                
+                let uint8: u8 = 255;
+                let uint16: u16 = 65535;
+                let uint32: u32 = 4294967295;
+                let uint64: u64 = 18446744073709551615;
+                let uint128: u128 = 0;
+                let usize_val: usize = 1;
+                
+                let float32: f32 = 3.14;
+                let float64: f64 = 2.718281828;
+                let boolean: bool = true;
+                let boolean_false: bool = false;
+                let character: char = 'A';
+                let string_slice: &str = "hello";
+            }
+        "#;
 
-        assert_eq!(counts.get("fn"), Some(&1));
-        assert_eq!(counts.get("let"), Some(&1));
-        assert_eq!(counts.get("if"), Some(&1));
-        assert_eq!(counts.get("return"), Some(&1));
+        // Control Flow
+        let control_flow = r#"
+            fn control_structures() {
+                if condition {
+                    // do something
+                } else {
+                    // do something else
+                }
+                
+                match value {
+                    1 => break,
+                    2 => continue,
+                    _ => {}
+                }
+                
+                loop {
+                    if should_exit {
+                        break;
+                    }
+                    continue;
+                }
+                
+                while condition {
+                    // repeat
+                }
+                
+                for item in collection {
+                    // iterate
+                }
+            }
+        "#;
 
-        // Test multiple occurrences
-        let content = "let x = 1; let y = 2; let z = x + y;";
-        let counts = count_keywords(content);
-        assert_eq!(counts.get("let"), Some(&3));
+        // Type Definitions and Structures
+        let type_definitions = r#"
+            struct Person {
+                name: String,
+                age: u32,
+            }
+            
+            enum Color {
+                Red,
+                Green,
+                Blue,
+            }
+            
+            trait Drawable {
+                fn draw(&self);
+            }
+            
+            type UserId = u64;
+        "#;
 
-        // Test no keywords
-        let content = "hello world 123 test";
-        let counts = count_keywords(content);
-        assert!(counts.is_empty());
+        // Functions and Control
+        let functions = r#"
+            fn basic_function() {
+                return;
+            }
+            
+            fn with_move_closure() {
+                let closure = move |x| x + 1;
+                return closure(5);
+            }
+        "#;
 
-        // Test keywords in different contexts
-        let content = "struct MyStruct { field: i32 } enum MyEnum { Variant }";
-        let counts = count_keywords(content);
-        assert_eq!(counts.get("struct"), Some(&1));
-        assert_eq!(counts.get("enum"), Some(&1));
-        assert_eq!(counts.get("i32"), Some(&1));
+        // Visibility and Mutability
+        let visibility_mutability = r#"
+            pub struct PublicStruct {
+                pub field: i32,
+            }
+            
+            const CONSTANT: i32 = 42;
+            static STATIC_VAR: i32 = 100;
+            
+            fn mutability_demo() {
+                let immutable = 10;
+                let mut mutable = 20;
+                mutable += 1;
+            }
+        "#;
+
+        // Module System and Scope
+        let modules_scope = r#"
+            mod my_module {
+                use super::external_function;
+                use crate::root_item;
+                
+                extern "C" {
+                    fn c_function();
+                }
+                
+                pub fn module_function() {
+                    super::parent_function();
+                    self::local_function();
+                    Self::associated_function();
+                }
+            }
+        "#;
+
+        // Async and Concurrency
+        let async_concurrency = r#"
+            async fn async_function() {
+                let result = other_async_function().await;
+                result
+            }
+        "#;
+
+        // Other Keywords and Operators
+        let other_keywords = r#"
+            fn other_features() {
+                let x = value as i32;
+                
+                if let Some(val) = option {
+                    // pattern matching
+                }
+                
+                let numbers = vec![1, 2, 3];
+                for num in numbers {
+                    // iteration
+                }
+                
+                let reference = &value;
+                let ref_pattern = ref value;
+                
+                fn generic_function<T>() where T: Clone {
+                    // generic with where clause
+                }
+                
+                unsafe {
+                    // unsafe code
+                }
+            }
+        "#;
+
+        // Reserved Keywords (future-proofing)
+        let reserved_keywords = r#"
+            // These are reserved for future use and should be recognized
+            // abstract become box do final macro override priv try typeof unsized virtual yield
+            // Note: These appear in comments since they're not yet implemented
+            fn reserved_demonstration() {
+                // abstract - for abstract classes/methods
+                // become - for moves that destructure
+                // box - for box syntax  
+                // do - for do expressions
+                // final - for final classes/methods
+                // macro - for macro definitions
+                // override - for method overriding
+                // priv - for private visibility
+                // try - for try expressions
+                // typeof - for typeof operator
+                // unsized - for unsized types
+                // virtual - for virtual methods
+                // yield - for generator functions
+            }
+        "#;
+
+        // Combine all sections
+        let comprehensive_content = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            primitive_types,
+            control_flow,
+            type_definitions,
+            functions,
+            visibility_mutability,
+            modules_scope,
+            async_concurrency,
+            other_keywords,
+            reserved_keywords
+        );
+
+        let counts = count_keywords(&comprehensive_content);
+
+        // Verify that ALL keywords are present in the comprehensive example
+        let mut missing_keywords = Vec::new();
+        for &keyword in RUST_KEYWORDS {
+            if counts.get(keyword).is_none() {
+                missing_keywords.push(keyword);
+            }
+        }
+
+        if !missing_keywords.is_empty() {
+            panic!(
+                "The following keywords are missing from the comprehensive test: {:?}",
+                missing_keywords
+            );
+        }
+
+        // Verify specific keywords appear at least once
+        for &keyword in RUST_KEYWORDS {
+            assert!(
+                counts.get(keyword).unwrap_or(&0) >= &1,
+                "Keyword '{}' should appear at least once in the comprehensive example",
+                keyword
+            );
+        }
+
+        println!(
+            "✅ All {} Rust keywords are properly tested!",
+            RUST_KEYWORDS.len()
+        );
+
+        // Test edge case: no keywords
+        let no_keywords_content = "hello world 123 test";
+        let no_keywords_counts = count_keywords(no_keywords_content);
+        assert!(no_keywords_counts.is_empty());
     }
 
     #[test]

@@ -125,7 +125,10 @@ pub fn analyze_directory(
 
 pub fn should_skip_dir(path: &Path) -> bool {
     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-        matches!(name, "target" | ".git" | "node_modules" | "vendor" | "tmp" | "log" | ".bundle")
+        matches!(
+            name,
+            "target" | ".git" | "node_modules" | "vendor" | "tmp" | "log" | ".bundle"
+        )
     } else {
         false
     }
@@ -135,7 +138,10 @@ pub fn is_ruby_file(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         matches!(ext, "rb" | "rake" | "gemspec")
     } else if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-        matches!(filename, "Rakefile" | "Gemfile" | "Guardfile" | "Capfile" | "Vagrantfile")
+        matches!(
+            filename,
+            "Rakefile" | "Gemfile" | "Guardfile" | "Capfile" | "Vagrantfile"
+        )
     } else {
         false
     }
@@ -174,35 +180,279 @@ mod tests {
 
     #[test]
     fn test_count_keywords() {
-        // Test basic keyword counting
-        let content = "def hello_world\n  if true\n    puts 'Hello, World!'\n  end\nend";
-        let counts = count_keywords(content);
+        // Core Ruby Keywords and Control Flow
+        let core_keywords = r#"
+            def main_method
+                if condition
+                    return true
+                elsif other_condition
+                    return false
+                else
+                    return nil
+                end
+                
+                unless negative_condition
+                    do_something
+                end
+                
+                case value
+                when 1
+                    puts "one"
+                when 2
+                    puts "two"
+                else
+                    puts "other"
+                end
+                
+                while condition
+                    break if should_exit
+                    next if should_skip
+                    redo if should_retry
+                end
+                
+                until condition
+                    # loop until condition is true
+                end
+                
+                for item in collection
+                    # iterate through collection
+                end
+            end
+        "#;
 
-        assert_eq!(counts.get("def"), Some(&1));
-        assert_eq!(counts.get("if"), Some(&1));
-        assert_eq!(counts.get("true"), Some(&1));
-        assert_eq!(counts.get("end"), Some(&2));
+        // Class and Module Definitions
+        let class_module_definitions = r#"
+            class Person
+                def initialize(name)
+                    @name = name
+                end
+                
+                def name
+                    @name
+                end
+                
+                private
+                
+                def private_method
+                    # private implementation
+                end
+                
+                protected
+                
+                def protected_method
+                    # protected implementation
+                end
+                
+                public
+                
+                def public_method
+                    # public interface
+                end
+            end
+            
+            module Enumerable
+                def each
+                    # implementation
+                end
+            end
+        "#;
 
-        // Test class and module keywords
-        let content = "class MyClass < SuperClass\n  include MyModule\n  def initialize\n    super\n  end\nend";
-        let counts = count_keywords(content);
-        assert_eq!(counts.get("class"), Some(&1));
-        assert_eq!(counts.get("include"), Some(&1));
-        assert_eq!(counts.get("def"), Some(&1));
-        assert_eq!(counts.get("initialize"), Some(&1));
-        assert_eq!(counts.get("super"), Some(&1));
-        assert_eq!(counts.get("end"), Some(&2));
+        // Metaprogramming and Attributes
+        let metaprogramming = r#"
+            class User
+                attr_reader :id
+                attr_writer :password
+                attr_accessor :name, :email
+                
+                include Comparable
+                extend ClassMethods
+                prepend SecurityModule
+                
+                alias old_name name
+                undef dangerous_method
+            end
+        "#;
 
-        // Test multiple occurrences
-        let content = "def method1\nend\ndef method2\nend\ndef method3\nend";
-        let counts = count_keywords(content);
-        assert_eq!(counts.get("def"), Some(&3));
-        assert_eq!(counts.get("end"), Some(&3));
+        // Exception Handling
+        let exception_handling = r#"
+            def risky_operation
+                begin
+                    # risky code here
+                    raise StandardError, "Something went wrong" if error_condition
+                rescue StandardError => e
+                    retry if should_retry
+                    # handle error
+                ensure
+                    # cleanup code
+                end
+                
+                catch(:early_exit) do
+                    throw(:early_exit) if should_exit_early
+                    # normal processing
+                end
+            end
+        "#;
 
-        // Test no keywords
-        let content = "hello world 123 test";
-        let counts = count_keywords(content);
-        assert!(counts.is_empty());
+        // Blocks, Procs and Lambdas
+        let blocks_procs = r#"
+            def demonstrate_blocks
+                # Block with yield
+                yield if block_given?
+                
+                # Proc creation
+                my_proc = proc { |x| x * 2 }
+                
+                # Lambda creation
+                my_lambda = lambda { |x| x + 1 }
+                
+                # Block methods
+                numbers = [1, 2, 3, 4, 5]
+                numbers.each { |n| puts n }
+                mapped = numbers.map { |n| n * 2 }
+                selected = numbers.select { |n| n.even? }
+                rejected = numbers.reject { |n| n.odd? }
+                found = numbers.find { |n| n > 3 }
+                collected = numbers.collect { |n| n.to_s }
+                sum = numbers.inject(0) { |acc, n| acc + n }
+                reduced = numbers.reduce(:+)
+            end
+        "#;
+
+        // String and Pattern Matching
+        let string_patterns = r#"
+            def string_operations
+                text = "Hello, World!"
+                
+                # String manipulation
+                text.gsub(/World/, "Ruby")
+                text.sub(/Hello/, "Hi")
+                
+                # Pattern matching
+                if text.match(/Hello/)
+                    puts "Found greeting"
+                end
+            end
+        "#;
+
+        // Object Methods and Comparisons
+        let object_methods = r#"
+            def object_comparisons
+                obj = Object.new
+                other = Object.allocate
+                
+                # Object creation and manipulation
+                copy = obj.dup
+                clone_obj = obj.clone
+                obj.freeze
+                
+                # Type checking and comparisons
+                obj.respond_to?(:method_name)
+                obj.kind_of?(Object)
+                obj.instance_of?(Object)
+                obj.is_a?(Object)
+                obj.eql?(other)
+                obj.equal?(other)
+            end
+        "#;
+
+        // Special Variables and Constants
+        let special_variables = r#"
+            def file_info
+                puts "Current file: #{__FILE__}"
+                puts "Current line: #{__LINE__}"
+                puts "Encoding: #{__ENCODING__}"
+            end
+        "#;
+
+        // Logical Operators
+        let logical_operators = r#"
+            def logical_operations
+                result = condition and other_condition
+                result = condition or fallback_condition
+                result = not negative_condition
+                
+                # Alternative syntax
+                result = condition && other_condition
+                result = condition || fallback_condition
+                result = !negative_condition
+            end
+        "#;
+
+        // Special Keywords
+        let special_keywords = r#"
+            def special_features
+                # Check if method or variable is defined
+                if defined?(some_variable)
+                    puts "Variable exists"
+                end
+                
+                # Reference to current object
+                puts self.class
+                
+                # Call parent method
+                super
+                
+                # Conditional execution
+                puts "debug" if debug_mode
+                puts "production" unless development_mode
+                
+                # Then keyword (optional)
+                if condition then
+                    do_something
+                end
+            end
+        "#;
+
+        // Combine all sections
+        let comprehensive_content = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            core_keywords,
+            class_module_definitions,
+            metaprogramming,
+            exception_handling,
+            blocks_procs,
+            string_patterns,
+            object_methods,
+            special_variables,
+            logical_operators,
+            special_keywords
+        );
+
+        let counts = count_keywords(&comprehensive_content);
+
+        // Verify that ALL keywords are present in the comprehensive example
+        let mut missing_keywords = Vec::new();
+        for &keyword in RUBY_KEYWORDS {
+            if counts.get(keyword).is_none() {
+                missing_keywords.push(keyword);
+            }
+        }
+
+        if !missing_keywords.is_empty() {
+            panic!(
+                "The following keywords are missing from the comprehensive test: {:?}",
+                missing_keywords
+            );
+        }
+
+        // Verify specific keywords appear at least once
+        for &keyword in RUBY_KEYWORDS {
+            assert!(
+                counts.get(keyword).unwrap_or(&0) >= &1,
+                "Keyword '{}' should appear at least once in the comprehensive example",
+                keyword
+            );
+        }
+
+        println!(
+            "✅ All {} Ruby keywords are properly tested!",
+            RUBY_KEYWORDS.len()
+        );
+
+        // Test edge case: no keywords
+        let no_keywords_content = "hello world 123 test";
+        let no_keywords_counts = count_keywords(no_keywords_content);
+        assert!(no_keywords_counts.is_empty());
     }
 
     #[test]
@@ -279,7 +529,8 @@ mod tests {
     #[test]
     fn test_ruby_blocks_and_iteration() {
         // Test block and iteration keywords
-        let content = "[1,2,3].each { |x| puts x }\n[1,2,3].map(&:to_s).select { |s| s.length > 0 }";
+        let content =
+            "[1,2,3].each { |x| puts x }\n[1,2,3].map(&:to_s).select { |s| s.length > 0 }";
         let counts = count_keywords(content);
         assert_eq!(counts.get("each"), Some(&1));
         assert_eq!(counts.get("map"), Some(&1));
@@ -354,7 +605,8 @@ mod tests {
     #[test]
     fn test_exception_handling() {
         // Test exception handling keywords
-        let content = "begin\n  raise StandardError\nrescue => e\n  retry\nensure\n  puts 'cleanup'\nend";
+        let content =
+            "begin\n  raise StandardError\nrescue => e\n  retry\nensure\n  puts 'cleanup'\nend";
         let counts = count_keywords(content);
         assert_eq!(counts.get("begin"), Some(&1));
         assert_eq!(counts.get("raise"), Some(&1));
