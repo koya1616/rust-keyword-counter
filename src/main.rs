@@ -76,6 +76,7 @@ enum OutputFormat {
     Json,
     Csv,
     Html,
+    Graph,
 }
 
 #[derive(Clone, Copy)]
@@ -102,6 +103,7 @@ fn parse_args(args: &[String]) -> (&str, OutputFormat, Language, Option<String>)
                         "json" => OutputFormat::Json,
                         "csv" => OutputFormat::Csv,
                         "html" => OutputFormat::Html,
+                        "graph" => OutputFormat::Graph,
                         _ => OutputFormat::Plain,
                     };
                     i += 2;
@@ -158,8 +160,8 @@ fn print_help() {
     println!();
     println!("OPTIONS:");
     println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, js, ts, ruby, rb, go, golang, python, py]");
-    println!("    -f, --format <FORMAT>    Output format [default: plain] [possible values: plain, json, csv, html]");
-    println!("    -o, --output <FILE>      Output file path (for json, csv, html formats)");
+    println!("    -f, --format <FORMAT>    Output format [default: plain] [possible values: plain, json, csv, html, graph]");
+    println!("    -o, --output <FILE>      Output file path (for json, csv, html, graph formats)");
     println!("    -h, --help               Print help information");
     println!();
     println!("EXAMPLES:");
@@ -175,6 +177,7 @@ fn print_help() {
     println!("    app --format json --language python https://github.com/django/django");
     println!("    app --format json --output results.json --language rust src/");
     println!("    app --format html --output analysis.html --language js");
+    println!("    app --format graph --output chart.svg --language rust");
     println!("    app -f csv -o data.csv -l python");
 }
 
@@ -248,6 +251,14 @@ fn print_results(
             } else {
                 let default_file = generate_default_filename(language, "html");
                 write_html_to_file(&sorted_counts, file_count, language, &default_file);
+            }
+        }
+        OutputFormat::Graph => {
+            if let Some(path) = output_file {
+                write_graph_to_file(&sorted_counts, file_count, language, &path);
+            } else {
+                let default_file = generate_default_filename(language, "svg");
+                write_graph_to_file(&sorted_counts, file_count, language, &default_file);
             }
         }
     }
@@ -557,6 +568,282 @@ fn write_html_to_file(
     println!("HTML results written to: {}", file_path);
 }
 
+fn write_graph_to_file(
+    sorted_counts: &[(&String, &usize)],
+    file_count: usize,
+    language: Language,
+    file_path: &str,
+) {
+    let mut file = match fs::File::create(file_path) {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("Error creating file {}: {}", file_path, e);
+            return;
+        }
+    };
+
+    let language_name = match language {
+        Language::Rust => "Rust",
+        Language::JavaScript => "JavaScript/TypeScript",
+        Language::Ruby => "Ruby",
+        Language::Golang => "Go",
+        Language::Python => "Python",
+    };
+
+    let total_keywords: usize = sorted_counts.iter().map(|(_, count)| **count).sum();
+
+    // Take top 20 keywords for visualization
+    let top_keywords: Vec<_> = sorted_counts
+        .iter()
+        .filter(|(_, count)| **count > 0)
+        .take(20)
+        .collect();
+
+    if top_keywords.is_empty() {
+        eprintln!("No keywords found to visualize");
+        return;
+    }
+
+    let max_count = top_keywords
+        .iter()
+        .map(|(_, count)| **count)
+        .max()
+        .unwrap_or(1);
+
+    // SVG dimensions and layout
+    let width = 1000;
+    let height = 600;
+    let margin = 60;
+    let chart_width = width - 2 * margin;
+    let chart_height = height - 2 * margin - 50; // Extra space for title
+    let bar_width = chart_width / top_keywords.len().max(1);
+
+    // Colors for bars (using HSL for good distribution)
+    let colors = generate_color_palette(top_keywords.len());
+
+    // Write SVG header
+    if let Err(e) = writeln!(file, r#"<?xml version="1.0" encoding="UTF-8"?>"#) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    if let Err(e) = writeln!(file, "<svg width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\" xmlns=\"http://www.w3.org/2000/svg\">", width, height, width, height) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    // Write styles
+    if let Err(e) = writeln!(
+        file,
+        r#"    <defs>
+        <style>
+            .title {{ font-family: 'Arial', sans-serif; font-size: 24px; font-weight: bold; text-anchor: middle; fill: #333; }}
+            .subtitle {{ font-family: 'Arial', sans-serif; font-size: 14px; text-anchor: middle; fill: #666; }}
+            .bar {{ cursor: pointer; transition: opacity 0.2s; }}
+            .bar:hover {{ opacity: 0.8; }}
+            .bar-label {{ font-family: 'Arial', sans-serif; font-size: 12px; text-anchor: middle; fill: #333; }}
+            .count-label {{ font-family: 'Arial', sans-serif; font-size: 11px; text-anchor: middle; fill: #fff; font-weight: bold; }}
+            .axis {{ stroke: #ccc; stroke-width: 1; }}
+            .grid {{ stroke: #eee; stroke-width: 0.5; }}
+        </style>
+    </defs>"#
+    ) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    // Background
+    if let Err(e) = writeln!(
+        file,
+        "    <rect width=\"100%\" height=\"100%\" fill=\"#fafafa\"/>"
+    ) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    // Title
+    if let Err(e) = writeln!(
+        file,
+        "    <text x=\"{}\" y=\"30\" class=\"title\">{} Keyword Analysis</text>",
+        width / 2,
+        language_name
+    ) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    if let Err(e) = writeln!(file, "    <text x=\"{}\" y=\"50\" class=\"subtitle\">Files: {} | Total Keywords: {} | Top {} Keywords</text>", width / 2, file_count, total_keywords, top_keywords.len()) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    // Grid lines
+    let grid_lines = generate_grid_lines(margin, margin + 30, chart_height, max_count);
+    if let Err(e) = write!(file, "{}", grid_lines) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    // Draw bars and labels
+    for (i, (keyword, count)) in top_keywords.iter().enumerate() {
+        let x = margin + i * bar_width;
+        let bar_height = ((**count as f64) / (max_count as f64) * chart_height as f64) as usize;
+        let y = margin + 30 + chart_height - bar_height;
+
+        let color = &colors[i % colors.len()];
+
+        // Bar
+        if let Err(e) = writeln!(
+            file,
+            "    <rect class=\"bar\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\">",
+            x + 2,
+            y,
+            bar_width - 4,
+            bar_height,
+            color
+        ) {
+            eprintln!("Error writing to file: {}", e);
+            return;
+        }
+
+        if let Err(e) = writeln!(file, "        <title>{}: {}</title>", keyword, count) {
+            eprintln!("Error writing to file: {}", e);
+            return;
+        }
+
+        if let Err(e) = writeln!(file, "    </rect>") {
+            eprintln!("Error writing to file: {}", e);
+            return;
+        }
+
+        // Count label on bar (if bar is tall enough)
+        if bar_height > 25 {
+            if let Err(e) = writeln!(
+                file,
+                "    <text x=\"{}\" y=\"{}\" class=\"count-label\">{}</text>",
+                x + bar_width / 2,
+                y + 15,
+                count
+            ) {
+                eprintln!("Error writing to file: {}", e);
+                return;
+            }
+        }
+
+        // Keyword label below bar
+        let label_y = margin + 30 + chart_height + 15;
+        let truncated_keyword = if keyword.len() > 8 {
+            format!("{}...", &keyword[..5])
+        } else {
+            keyword.to_string()
+        };
+
+        if let Err(e) = writeln!(
+            file,
+            "    <text x=\"{}\" y=\"{}\" class=\"bar-label\" transform=\"rotate(-45, {}, {})\">{}</text>",
+            x + bar_width / 2, label_y, x + bar_width / 2, label_y, truncated_keyword
+        ) {
+            eprintln!("Error writing to file: {}", e);
+            return;
+        }
+    }
+
+    // X and Y axes
+    if let Err(e) = writeln!(file, "    <!-- Axes -->") {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    if let Err(e) = writeln!(
+        file,
+        "    <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" class=\"axis\"/>",
+        margin,
+        margin + 30,
+        margin,
+        margin + 30 + chart_height
+    ) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    if let Err(e) = writeln!(
+        file,
+        "    <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" class=\"axis\"/>",
+        margin,
+        margin + 30 + chart_height,
+        margin + chart_width,
+        margin + 30 + chart_height
+    ) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    // Y-axis labels
+    let y_labels = generate_y_axis_labels(margin - 10, margin + 30, chart_height, max_count);
+    if let Err(e) = write!(file, "{}", y_labels) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    if let Err(e) = writeln!(file, "</svg>") {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    println!("Graph results written to: {}", file_path);
+}
+
+fn generate_color_palette(count: usize) -> Vec<String> {
+    let mut colors = Vec::new();
+    let base_colors = vec![
+        "#3498db", "#e74c3c", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#34495e", "#e67e22",
+        "#95a5a6", "#f1c40f", "#c0392b", "#27ae60", "#8e44ad", "#16a085", "#2c3e50", "#d35400",
+        "#7f8c8d", "#f4d03f", "#85c1e9", "#f8c471",
+    ];
+
+    for i in 0..count {
+        colors.push(base_colors[i % base_colors.len()].to_string());
+    }
+
+    colors
+}
+
+fn generate_grid_lines(x_start: usize, y_start: usize, height: usize, _max_value: usize) -> String {
+    let mut lines = String::new();
+    let grid_count = 5;
+
+    for i in 0..=grid_count {
+        let y = y_start + (height * i) / grid_count;
+        lines.push_str(&format!(
+            "    <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" class=\"grid\"/>\n",
+            x_start,
+            y,
+            x_start + 880,
+            y
+        ));
+    }
+
+    lines
+}
+
+fn generate_y_axis_labels(x: usize, y_start: usize, height: usize, max_value: usize) -> String {
+    let mut labels = String::new();
+    let label_count = 5;
+
+    for i in 0..=label_count {
+        let y = y_start + height - (height * i) / label_count;
+        let value = (max_value * i) / label_count;
+        labels.push_str(&format!(
+            "    <text x=\"{}\" y=\"{}\" class=\"bar-label\" text-anchor=\"end\">{}</text>\n",
+            x,
+            y + 4,
+            value
+        ));
+    }
+
+    labels
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -624,6 +911,14 @@ mod tests {
         ];
         let (_path, format, _language, _output_file) = parse_args(&args);
         assert!(matches!(format, OutputFormat::Html));
+
+        let args = vec![
+            "program".to_string(),
+            "--format".to_string(),
+            "graph".to_string(),
+        ];
+        let (_path, format, _language, _output_file) = parse_args(&args);
+        assert!(matches!(format, OutputFormat::Graph));
 
         // Test language options
         let args = vec![
@@ -718,11 +1013,13 @@ mod tests {
         let json = OutputFormat::Json;
         let csv = OutputFormat::Csv;
         let html = OutputFormat::Html;
+        let graph = OutputFormat::Graph;
 
         assert!(matches!(plain, OutputFormat::Plain));
         assert!(matches!(json, OutputFormat::Json));
         assert!(matches!(csv, OutputFormat::Csv));
         assert!(matches!(html, OutputFormat::Html));
+        assert!(matches!(graph, OutputFormat::Graph));
     }
 
     #[test]
@@ -932,12 +1229,30 @@ mod tests {
             Some("empty_test.html".to_string()),
         );
 
+        // Test Graph format
+        print_results(
+            &counts,
+            10,
+            OutputFormat::Graph,
+            Language::Rust,
+            Some("test_output.svg".to_string()),
+        );
+        print_results(
+            &empty_counts,
+            0,
+            OutputFormat::Graph,
+            Language::JavaScript,
+            Some("empty_test.svg".to_string()),
+        );
+
         // Clean up test files (ignore errors if files don't exist)
         let _ = fs::remove_file("test_output.json");
         let _ = fs::remove_file("test_output.csv");
         let _ = fs::remove_file("test_output.html");
+        let _ = fs::remove_file("test_output.svg");
         let _ = fs::remove_file("empty_test.json");
         let _ = fs::remove_file("empty_test.csv");
         let _ = fs::remove_file("empty_test.html");
+        let _ = fs::remove_file("empty_test.svg");
     }
 }
