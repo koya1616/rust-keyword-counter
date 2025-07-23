@@ -5,6 +5,7 @@ use std::process::Command;
 
 mod golang;
 mod javascript;
+mod python;
 mod ruby;
 mod rust;
 
@@ -40,6 +41,9 @@ fn main() {
         Language::Golang => {
             golang::analyze_directory(&actual_path, &mut total_counts, &mut file_count)
         }
+        Language::Python => {
+            python::analyze_directory(&actual_path, &mut total_counts, &mut file_count)
+        }
     };
 
     match result {
@@ -72,6 +76,7 @@ enum Language {
     JavaScript,
     Ruby,
     Golang,
+    Python,
 }
 
 fn parse_args(args: &[String]) -> (&str, OutputFormat, Language) {
@@ -101,6 +106,7 @@ fn parse_args(args: &[String]) -> (&str, OutputFormat, Language) {
                         "rust" | "rs" => Language::Rust,
                         "ruby" | "rb" => Language::Ruby,
                         "go" | "golang" => Language::Golang,
+                        "python" | "py" => Language::Python,
                         _ => Language::Rust,
                     };
                     i += 2;
@@ -133,7 +139,7 @@ fn print_help() {
     println!("    <PATH>    Directory, file, or Git URL (GitHub/GitLab) to analyze [default: .]");
     println!();
     println!("OPTIONS:");
-    println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, js, ts, ruby, rb, go, golang]");
+    println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, js, ts, ruby, rb, go, golang, python, py]");
     println!("    -f, --format <FORMAT>    Output format [default: plain] [possible values: plain, json, csv]");
     println!("    -h, --help               Print help information");
     println!();
@@ -142,10 +148,12 @@ fn print_help() {
     println!("    app --language js src/");
     println!("    app --language ruby lib/");
     println!("    app --language go cmd/");
+    println!("    app --language python src/");
     println!("    app -l ts github.com/microsoft/typescript");
+    println!("    app -l py github.com/psf/requests");
     println!("    app -l rs gitlab.com/gitlab-org/gitlab");
     println!("    app -l go https://github.com/golang/go");
-    println!("    app --format json --language rust https://github.com/rust-lang/rust");
+    println!("    app --format json --language python https://github.com/django/django");
 }
 
 fn is_git_url(input: &str) -> bool {
@@ -206,6 +214,7 @@ fn print_plain(sorted_counts: &[(&String, &usize)], file_count: usize, language:
         Language::JavaScript => "JavaScript/TypeScript",
         Language::Ruby => "Ruby",
         Language::Golang => "Go",
+        Language::Python => "Python",
     };
 
     println!("\n=== {} Keyword Analysis Results ===", language_name);
