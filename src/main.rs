@@ -3,6 +3,7 @@ use std::env;
 use std::fs;
 use std::process::Command;
 
+mod golang;
 mod javascript;
 mod ruby;
 mod rust;
@@ -36,6 +37,9 @@ fn main() {
             javascript::analyze_directory(&actual_path, &mut total_counts, &mut file_count)
         }
         Language::Ruby => ruby::analyze_directory(&actual_path, &mut total_counts, &mut file_count),
+        Language::Golang => {
+            golang::analyze_directory(&actual_path, &mut total_counts, &mut file_count)
+        }
     };
 
     match result {
@@ -67,6 +71,7 @@ enum Language {
     Rust,
     JavaScript,
     Ruby,
+    Golang,
 }
 
 fn parse_args(args: &[String]) -> (&str, OutputFormat, Language) {
@@ -95,6 +100,7 @@ fn parse_args(args: &[String]) -> (&str, OutputFormat, Language) {
                         "js" | "ts" | "javascript" | "typescript" => Language::JavaScript,
                         "rust" | "rs" => Language::Rust,
                         "ruby" | "rb" => Language::Ruby,
+                        "go" | "golang" => Language::Golang,
                         _ => Language::Rust,
                     };
                     i += 2;
@@ -127,7 +133,7 @@ fn print_help() {
     println!("    <PATH>    Directory, file, or Git URL (GitHub/GitLab) to analyze [default: .]");
     println!();
     println!("OPTIONS:");
-    println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, js, ts, ruby, rb]");
+    println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, js, ts, ruby, rb, go, golang]");
     println!("    -f, --format <FORMAT>    Output format [default: plain] [possible values: plain, json, csv]");
     println!("    -h, --help               Print help information");
     println!();
@@ -135,8 +141,10 @@ fn print_help() {
     println!("    app --language rust");
     println!("    app --language js src/");
     println!("    app --language ruby lib/");
+    println!("    app --language go cmd/");
     println!("    app -l ts github.com/microsoft/typescript");
     println!("    app -l rs gitlab.com/gitlab-org/gitlab");
+    println!("    app -l go https://github.com/golang/go");
     println!("    app --format json --language rust https://github.com/rust-lang/rust");
 }
 
@@ -337,6 +345,22 @@ mod tests {
         let (_path, _format, language) = parse_args(&args);
         assert!(matches!(language, Language::Ruby));
 
+        let args = vec![
+            "program".to_string(),
+            "--language".to_string(),
+            "go".to_string(),
+        ];
+        let (_path, _format, language) = parse_args(&args);
+        assert!(matches!(language, Language::Golang));
+
+        let args = vec![
+            "program".to_string(),
+            "-l".to_string(),
+            "golang".to_string(),
+        ];
+        let (_path, _format, language) = parse_args(&args);
+        assert!(matches!(language, Language::Golang));
+
         // Test combined arguments
         let args = vec![
             "program".to_string(),
@@ -368,11 +392,13 @@ mod tests {
         let rust_lang = Language::Rust;
         let js_lang = Language::JavaScript;
         let ruby_lang = Language::Ruby;
+        let go_lang = Language::Golang;
 
         // Test that they are different
         assert!(matches!(rust_lang, Language::Rust));
         assert!(matches!(js_lang, Language::JavaScript));
         assert!(matches!(ruby_lang, Language::Ruby));
+        assert!(matches!(go_lang, Language::Golang));
 
         // Test default language in parse_args
         let args = vec!["program".to_string()];
