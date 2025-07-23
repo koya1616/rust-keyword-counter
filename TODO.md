@@ -17,7 +17,6 @@ The multi-language keyword analyzer is now functional with:
 - Python言語サポート追加
 
 ### Medium Priority
-- src/main.rs:199 で「Rust Keyword Analysis Results」と固定表示されているため、多言語対応の表示修正
 - HTML出力
 
 ### Low Priority

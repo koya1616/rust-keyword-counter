@@ -46,7 +46,7 @@ fn main() {
         Ok(_) => {
             eprintln!("Analysis completed! Found {} files", file_count);
             eprintln!("Generating results...\n");
-            print_results(&total_counts, file_count, output_format);
+            print_results(&total_counts, file_count, output_format, language);
         }
         Err(e) => {
             eprintln!("Error: {}", e);
@@ -184,19 +184,31 @@ fn clone_git_repo(url: &str) -> Result<String, Box<dyn std::error::Error>> {
     Ok(temp_dir)
 }
 
-fn print_results(counts: &HashMap<String, usize>, file_count: usize, format: OutputFormat) {
+fn print_results(
+    counts: &HashMap<String, usize>,
+    file_count: usize,
+    format: OutputFormat,
+    language: Language,
+) {
     let mut sorted_counts: Vec<_> = counts.iter().collect();
     sorted_counts.sort_by(|a, b| b.1.cmp(a.1));
 
     match format {
-        OutputFormat::Plain => print_plain(&sorted_counts, file_count),
+        OutputFormat::Plain => print_plain(&sorted_counts, file_count, language),
         OutputFormat::Json => print_json(&sorted_counts, file_count),
         OutputFormat::Csv => print_csv(&sorted_counts, file_count),
     }
 }
 
-fn print_plain(sorted_counts: &[(&String, &usize)], file_count: usize) {
-    println!("\n=== Rust Keyword Analysis Results ===");
+fn print_plain(sorted_counts: &[(&String, &usize)], file_count: usize, language: Language) {
+    let language_name = match language {
+        Language::Rust => "Rust",
+        Language::JavaScript => "JavaScript/TypeScript",
+        Language::Ruby => "Ruby",
+        Language::Golang => "Go",
+    };
+
+    println!("\n=== {} Keyword Analysis Results ===", language_name);
     println!("Files analyzed: {}", file_count);
     println!(
         "Total keywords found: {}\n",
@@ -528,18 +540,18 @@ mod tests {
         // but we can test that the functions don't panic with valid data
 
         // Test Plain format
-        print_results(&counts, 10, OutputFormat::Plain);
+        print_results(&counts, 10, OutputFormat::Plain, Language::Rust);
 
         // Test JSON format
-        print_results(&counts, 10, OutputFormat::Json);
+        print_results(&counts, 10, OutputFormat::Json, Language::JavaScript);
 
         // Test CSV format
-        print_results(&counts, 10, OutputFormat::Csv);
+        print_results(&counts, 10, OutputFormat::Csv, Language::Ruby);
 
         // Test with empty data
         let empty_counts = HashMap::new();
-        print_results(&empty_counts, 0, OutputFormat::Plain);
-        print_results(&empty_counts, 0, OutputFormat::Json);
-        print_results(&empty_counts, 0, OutputFormat::Csv);
+        print_results(&empty_counts, 0, OutputFormat::Plain, Language::Golang);
+        print_results(&empty_counts, 0, OutputFormat::Json, Language::Rust);
+        print_results(&empty_counts, 0, OutputFormat::Csv, Language::JavaScript);
     }
 }
