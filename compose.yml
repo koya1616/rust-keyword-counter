@@ -1,0 +1,14 @@
+services:
+  rust-dev:
+    build: .
+    container_name: rust-development
+    volumes:
+      - .:/usr/src/app
+      - cargo-cache:/usr/local/cargo/registry
+    working_dir: /usr/src/app
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+
+volumes:
+  cargo-cache:
