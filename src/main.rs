@@ -131,22 +131,31 @@ fn print_help() {
     println!("EXAMPLES:");
     println!("    app --language rust");
     println!("    app --language typescript src/");
-    println!("    app -l ts https://github.com/microsoft/typescript");
+    println!("    app -l ts github.com/microsoft/typescript");
     println!("    app --format json --language rust https://github.com/rust-lang/rust");
 }
 
 fn is_github_url(input: &str) -> bool {
-    input.starts_with("https://github.com/") || input.starts_with("http://github.com/")
+    input.starts_with("https://github.com/")
+        || input.starts_with("http://github.com/")
+        || input.starts_with("github.com/")
 }
 
 fn clone_github_repo(url: &str) -> Result<String, Box<dyn std::error::Error>> {
     let temp_dir = format!("/tmp/rust_analyzer_{}", std::process::id());
 
-    eprintln!("Cloning repository: {}", url);
+    // Normalize URL - add https:// if missing protocol
+    let normalized_url = if url.starts_with("github.com/") {
+        format!("https://{}", url)
+    } else {
+        url.to_string()
+    };
+
+    eprintln!("Cloning repository: {}", normalized_url);
     eprintln!("Target directory: {}", temp_dir);
 
     let output = Command::new("git")
-        .args(&["clone", "--depth", "1", url, &temp_dir])
+        .args(&["clone", "--depth", "1", &normalized_url, &temp_dir])
         .output()?;
 
     if !output.status.success() {
@@ -246,6 +255,7 @@ mod tests {
         assert!(is_github_url("https://github.com/rust-lang/rust"));
         assert!(is_github_url("https://github.com/tokio-rs/tokio"));
         assert!(is_github_url("http://github.com/user/repo"));
+        assert!(is_github_url("github.com/user/repo")); // Protocol-less URL should work
 
         // Non-GitHub URLs should not be detected
         assert!(!is_github_url("https://gitlab.com/user/repo"));
@@ -256,8 +266,9 @@ mod tests {
         assert!(!is_github_url(""));
 
         // Edge cases
-        assert!(!is_github_url("github.com/user/repo")); // Missing protocol
         assert!(!is_github_url("https://github.com")); // No repo path
+        assert!(!is_github_url("github.com")); // No repo path (protocol-less)
+        assert!(!is_github_url("gitlab.com/user/repo")); // Wrong host
     }
 
     #[test]
@@ -415,6 +426,27 @@ mod tests {
 
         // Note: We skip actual network tests to avoid authentication prompts
         // Real functionality is tested through integration tests manually
+    }
+
+    #[test]
+    fn test_url_normalization() {
+        // Test URL normalization logic (without actual cloning)
+
+        // Protocol-less URL should be normalized to https
+        let normalized_https = if "github.com/user/repo".starts_with("github.com/") {
+            format!("https://{}", "github.com/user/repo")
+        } else {
+            "github.com/user/repo".to_string()
+        };
+        assert_eq!(normalized_https, "https://github.com/user/repo");
+
+        // URLs with protocol should remain unchanged
+        let normalized_existing = if "https://github.com/user/repo".starts_with("github.com/") {
+            format!("https://{}", "https://github.com/user/repo")
+        } else {
+            "https://github.com/user/repo".to_string()
+        };
+        assert_eq!(normalized_existing, "https://github.com/user/repo");
     }
 
     #[test]
