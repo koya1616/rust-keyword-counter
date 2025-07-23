@@ -10,8 +10,8 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let (target_path, output_format, language) = parse_args(&args);
 
-    let actual_path = if is_github_url(&target_path) {
-        match clone_github_repo(&target_path) {
+    let actual_path = if is_git_url(&target_path) {
+        match clone_git_repo(&target_path) {
             Ok(temp_path) => temp_path,
             Err(e) => {
                 eprintln!("Error cloning repository: {}", e);
@@ -23,7 +23,7 @@ fn main() {
     };
 
     if !matches!(output_format, OutputFormat::Json) {
-        println!("Analyzing Rust files in: {}", actual_path);
+        println!("Analyzing files in: {}", actual_path);
     }
 
     let mut total_counts: HashMap<String, usize> = HashMap::new();
@@ -47,8 +47,7 @@ fn main() {
         }
     }
 
-    // Clean up temporary directory if it was a GitHub URL
-    if is_github_url(&target_path) {
+    if is_git_url(&target_path) {
         eprintln!("Cleaning up temporary directory...");
         let _ = fs::remove_dir_all(&actual_path);
     }
@@ -121,7 +120,7 @@ fn print_help() {
     println!("    app [PATH] [OPTIONS]");
     println!();
     println!("ARGS:");
-    println!("    <PATH>    Directory, file, or GitHub URL to analyze [default: .]");
+    println!("    <PATH>    Directory, file, or Git URL (GitHub/GitLab) to analyze [default: .]");
     println!();
     println!("OPTIONS:");
     println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, typescript, ts]");
@@ -132,20 +131,24 @@ fn print_help() {
     println!("    app --language rust");
     println!("    app --language typescript src/");
     println!("    app -l ts github.com/microsoft/typescript");
+    println!("    app -l rs gitlab.com/gitlab-org/gitlab");
     println!("    app --format json --language rust https://github.com/rust-lang/rust");
 }
 
-fn is_github_url(input: &str) -> bool {
+fn is_git_url(input: &str) -> bool {
     input.starts_with("https://github.com/")
         || input.starts_with("http://github.com/")
         || input.starts_with("github.com/")
+        || input.starts_with("https://gitlab.com/")
+        || input.starts_with("http://gitlab.com/")
+        || input.starts_with("gitlab.com/")
 }
 
-fn clone_github_repo(url: &str) -> Result<String, Box<dyn std::error::Error>> {
+fn clone_git_repo(url: &str) -> Result<String, Box<dyn std::error::Error>> {
     let temp_dir = format!("/tmp/rust_analyzer_{}", std::process::id());
 
     // Normalize URL - add https:// if missing protocol
-    let normalized_url = if url.starts_with("github.com/") {
+    let normalized_url = if url.starts_with("github.com/") || url.starts_with("gitlab.com/") {
         format!("https://{}", url)
     } else {
         url.to_string()
@@ -250,25 +253,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_is_github_url() {
+    fn test_is_git_url() {
         // GitHub URLs should be detected
-        assert!(is_github_url("https://github.com/rust-lang/rust"));
-        assert!(is_github_url("https://github.com/tokio-rs/tokio"));
-        assert!(is_github_url("http://github.com/user/repo"));
-        assert!(is_github_url("github.com/user/repo")); // Protocol-less URL should work
+        assert!(is_git_url("https://github.com/rust-lang/rust"));
+        assert!(is_git_url("http://github.com/user/repo"));
+        assert!(is_git_url("github.com/user/repo"));
 
-        // Non-GitHub URLs should not be detected
-        assert!(!is_github_url("https://gitlab.com/user/repo"));
-        assert!(!is_github_url("https://bitbucket.org/user/repo"));
-        assert!(!is_github_url("./local/path"));
-        assert!(!is_github_url("/absolute/path"));
-        assert!(!is_github_url("relative/path"));
-        assert!(!is_github_url(""));
+        // GitLab URLs should be detected
+        assert!(is_git_url("https://gitlab.com/gitlab-org/gitlab"));
+        assert!(is_git_url("http://gitlab.com/user/repo"));
+        assert!(is_git_url("gitlab.com/user/repo"));
+
+        // Non-Git URLs should not be detected
+        assert!(!is_git_url("https://bitbucket.org/user/repo"));
+        assert!(!is_git_url("./local/path"));
+        assert!(!is_git_url("/absolute/path"));
+        assert!(!is_git_url(""));
 
         // Edge cases
-        assert!(!is_github_url("https://github.com")); // No repo path
-        assert!(!is_github_url("github.com")); // No repo path (protocol-less)
-        assert!(!is_github_url("gitlab.com/user/repo")); // Wrong host
+        assert!(!is_git_url("https://github.com"));
+        assert!(!is_git_url("github.com"));
+        assert!(!is_git_url("https://gitlab.com"));
+        assert!(!is_git_url("gitlab.com"));
     }
 
     #[test]
@@ -410,13 +416,13 @@ mod tests {
     }
 
     #[test]
-    fn test_clone_github_repo_mock() {
+    fn test_clone_git_repo_mock() {
         // Mock test - we only test the function signature and that it returns Result
         // We don't actually call the function to avoid network access and git authentication
 
         // Test that the function signature is correct (compile-time test)
         fn _test_signature() {
-            let _: fn(&str) -> Result<String, Box<dyn std::error::Error>> = clone_github_repo;
+            let _: fn(&str) -> Result<String, Box<dyn std::error::Error>> = clone_git_repo;
         }
 
         // Test temp directory pattern generation logic (without actual cloning)
@@ -432,16 +438,30 @@ mod tests {
     fn test_url_normalization() {
         // Test URL normalization logic (without actual cloning)
 
-        // Protocol-less URL should be normalized to https
-        let normalized_https = if "github.com/user/repo".starts_with("github.com/") {
+        // Protocol-less GitHub URL should be normalized to https
+        let normalized_github = if "github.com/user/repo".starts_with("github.com/")
+            || "github.com/user/repo".starts_with("gitlab.com/")
+        {
             format!("https://{}", "github.com/user/repo")
         } else {
             "github.com/user/repo".to_string()
         };
-        assert_eq!(normalized_https, "https://github.com/user/repo");
+        assert_eq!(normalized_github, "https://github.com/user/repo");
+
+        // Protocol-less GitLab URL should be normalized to https
+        let normalized_gitlab = if "gitlab.com/user/repo".starts_with("github.com/")
+            || "gitlab.com/user/repo".starts_with("gitlab.com/")
+        {
+            format!("https://{}", "gitlab.com/user/repo")
+        } else {
+            "gitlab.com/user/repo".to_string()
+        };
+        assert_eq!(normalized_gitlab, "https://gitlab.com/user/repo");
 
         // URLs with protocol should remain unchanged
-        let normalized_existing = if "https://github.com/user/repo".starts_with("github.com/") {
+        let normalized_existing = if "https://github.com/user/repo".starts_with("github.com/")
+            || "https://github.com/user/repo".starts_with("gitlab.com/")
+        {
             format!("https://{}", "https://github.com/user/repo")
         } else {
             "https://github.com/user/repo".to_string()
