@@ -168,32 +168,241 @@ mod tests {
 
     #[test]
     fn test_count_keywords() {
-        // Test basic keyword counting
-        let content = "function main() { let x = 42; if (x > 0) { return; } }";
-        let counts = count_keywords(content);
+        // Import/Export and Module System
+        let imports_exports = r#"
+            import { Component } from 'react';
+            export default class App extends Component {
+                const fs = require('fs');
+                
+                declare module 'external-lib' {
+                    export function method(): void;
+                }
+                
+                declare package 'my-package' {
+                    export const version: string;
+                }
+            }
+        "#;
 
-        assert_eq!(counts.get("function"), Some(&1));
-        assert_eq!(counts.get("let"), Some(&1));
-        assert_eq!(counts.get("if"), Some(&1));
-        assert_eq!(counts.get("return"), Some(&1));
+        // Classes and Object-Oriented Programming
+        let classes_oop = r#"
+            abstract class BaseEntity {
+                private readonly id: number;
+                protected name: string;
+                public static count: number = 0;
+                
+                constructor(name: string) {
+                    this.name = name;
+                    this.id = BaseEntity.count++;
+                }
+                
+                abstract process(): void;
+                
+                get getName(): string {
+                    return this.name;
+                }
+                
+                set setName(value: string) {
+                    this.name = value;
+                }
+            }
+            
+            class UserService implements Service {
+                override async fetchUser(id: bigint): Promise<User | null> {
+                    const result = await super.fetchUser(id);
+                    return result;
+                }
+            }
+        "#;
 
-        // Test TypeScript-specific keywords
-        let content = "interface User { name: string; age: number; } type ID = string | number;";
-        let counts = count_keywords(content);
-        assert_eq!(counts.get("interface"), Some(&1));
-        assert_eq!(counts.get("string"), Some(&2));
-        assert_eq!(counts.get("number"), Some(&2));
-        assert_eq!(counts.get("type"), Some(&1));
+        // Interface and Type Definitions
+        let interfaces_types = r#"
+            interface User {
+                name: string;
+                age: number;
+                isActive: boolean;
+                data: any;
+                tags: symbol[];
+                metadata: object;
+                id: bigint;
+            }
+            
+            type Status = 'active' | 'inactive';
+            type UserKey = keyof User;
+            type StringOrNumber = string | number;
+            type ReadonlyUser = Readonly<User>;
+            
+            enum Color {
+                Red,
+                Green,
+                Blue
+            }
+        "#;
 
-        // Test multiple occurrences
-        let content = "let x = 1; let y = 2; let z = x + y;";
-        let counts = count_keywords(content);
-        assert_eq!(counts.get("let"), Some(&3));
+        // Advanced TypeScript Types
+        let advanced_types = r#"
+            type NonNullable<T> = T extends null | undefined ? never : T;
+            type ReturnType<T> = T extends (...args: any[]) => infer R ? R : never;
+            type Contravariant<out T> = {
+                consume: (value: T) => void;
+            };
+            type Uppercase<S extends string> = intrinsic;
+            
+            const config = {
+                apiUrl: 'https://api.example.com',
+                timeout: 5000
+            } satisfies Config;
+        "#;
 
-        // Test no keywords
-        let content = "hello world 123 test";
-        let counts = count_keywords(content);
-        assert!(counts.is_empty());
+        // Control Flow and Logic
+        let control_flow = r#"
+            function processUsers(): void {
+                for (const user of users) {
+                    if (user.isActive) {
+                        switch (user.status) {
+                            case 'active':
+                                break;
+                            case 'inactive':
+                                break;
+                            default:
+                                debugger;
+                                continue;
+                        }
+                    } else {
+                        do {
+                            user.retryCount++;
+                        } while (user.retryCount < 3);
+                    }
+                }
+            }
+        "#;
+
+        // Async/Await and Error Handling
+        let async_error_handling = r#"
+            async function fetchUser(id: bigint): Promise<User | null> {
+                try {
+                    const response = await fetch(`/api/user/${id}`);
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch user');
+                    }
+                    return await response.json() as User;
+                } catch (error) {
+                    console.error('Error fetching user:', error);
+                    return null;
+                } finally {
+                    console.log('Fetch attempt completed');
+                }
+            }
+        "#;
+
+        // Functions and Generators
+        let functions_generators = r#"
+            function isUser(obj: any): obj is User {
+                return obj && typeof obj.name === 'string';
+            }
+            
+            function assertUser(obj: unknown): asserts obj is User {
+                if (!isUser(obj)) {
+                    throw new Error('Not a user');
+                }
+            }
+            
+            function* generateUsers(): Generator<User, void, unknown> {
+                for (let i = 0; i < users.length; i++) {
+                    yield users[i];
+                }
+            }
+            
+            function logMessage(message: string): void {
+                console.log(message);
+            }
+        "#;
+
+        // Variables and Operators
+        let variables_operators = r#"
+            const API_URL: string = 'https://api.example.com';
+            let currentUser: User | null = null;
+            var globalConfig: any = {};
+            
+            const isReady: boolean = true;
+            const isDisabled: boolean = false;
+            const emptyValue: null = null;
+            const notSet: undefined = undefined;
+            const dynamicValue: unknown = 'could be anything';
+            const neverValue: never = (() => { throw new Error(); })();
+            const uniqueSymbol: unique symbol = Symbol('unique');
+            
+            if (user instanceof UserModel && typeof user.name === 'string') {
+                return user.name in validNames && user.age > 0;
+            }
+            
+            delete globalConfig.temporaryProperty;
+        "#;
+
+        // Namespace and Global Declarations
+        let namespaces_globals = r#"
+            namespace Utils {
+                export function helper(): void {}
+            }
+            
+            declare global {
+                interface Window {
+                    customProperty: unknown;
+                }
+            }
+            
+            var oldVar = 'legacy';
+            with (config) {
+                // Legacy code example
+            }
+        "#;
+
+        // Combine all sections
+        let comprehensive_content = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            imports_exports,
+            classes_oop,
+            interfaces_types,
+            advanced_types,
+            control_flow,
+            async_error_handling,
+            functions_generators,
+            variables_operators,
+            namespaces_globals
+        );
+
+        let counts = count_keywords(&comprehensive_content);
+
+        let mut missing_keywords = Vec::new();
+        for &keyword in JAVASCRIPT_KEYWORDS {
+            if counts.get(keyword).is_none() {
+                missing_keywords.push(keyword);
+            }
+        }
+
+        if !missing_keywords.is_empty() {
+            panic!(
+                "The following keywords are missing from the comprehensive test: {:?}",
+                missing_keywords
+            );
+        }
+
+        for &keyword in JAVASCRIPT_KEYWORDS {
+            assert!(
+                counts.get(keyword).unwrap_or(&0) >= &1,
+                "Keyword '{}' should appear at least once in the comprehensive example",
+                keyword
+            );
+        }
+
+        println!(
+            "✅ All {} JavaScript/TypeScript keywords are properly tested!",
+            JAVASCRIPT_KEYWORDS.len()
+        );
+
+        let no_keywords_content = "hello world 123 test";
+        let no_keywords_counts = count_keywords(no_keywords_content);
+        assert!(no_keywords_counts.is_empty());
     }
 
     #[test]
