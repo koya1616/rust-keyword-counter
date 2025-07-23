@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-pub const TYPESCRIPT_KEYWORDS: &[&str] = &[
+pub const JAVASCRIPT_KEYWORDS: &[&str] = &[
     // JavaScript/TypeScript keywords
     "abstract",
     "any",
@@ -94,7 +94,7 @@ pub fn analyze_directory(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let path = Path::new(path);
 
-    if path.is_file() && is_typescript_file(&path) {
+    if path.is_file() && is_javascript_file(&path) {
         eprintln!("Analyzing file: {}", path.display());
         analyze_file(path, total_counts)?;
         *file_count += 1;
@@ -107,7 +107,7 @@ pub fn analyze_directory(
             if entry_path.is_dir() && !should_skip_dir(&entry_path) {
                 eprintln!("Entering directory: {}", entry_path.display());
                 analyze_directory(entry_path.to_str().unwrap(), total_counts, file_count)?;
-            } else if is_typescript_file(&entry_path) {
+            } else if is_javascript_file(&entry_path) {
                 eprintln!("Analyzing file: {}", entry_path.display());
                 analyze_file(&entry_path, total_counts)?;
                 *file_count += 1;
@@ -127,7 +127,7 @@ pub fn should_skip_dir(path: &Path) -> bool {
     }
 }
 
-pub fn is_typescript_file(path: &Path) -> bool {
+pub fn is_javascript_file(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         matches!(ext, "ts" | "tsx" | "js" | "jsx")
     } else {
@@ -154,7 +154,7 @@ pub fn count_keywords(content: &str) -> HashMap<String, usize> {
 
     // Simple tokenization - split on non-alphanumeric characters
     for word in content.split(|c: char| !c.is_alphanumeric() && c != '_' && c != '$') {
-        if TYPESCRIPT_KEYWORDS.contains(&word) {
+        if JAVASCRIPT_KEYWORDS.contains(&word) {
             *counts.entry(word.to_string()).or_insert(0) += 1;
         }
     }
@@ -197,21 +197,21 @@ mod tests {
     }
 
     #[test]
-    fn test_is_typescript_file() {
+    fn test_is_javascript_file() {
         use std::path::PathBuf;
 
-        // TypeScript files should be detected
-        assert!(is_typescript_file(&PathBuf::from("app.ts")));
-        assert!(is_typescript_file(&PathBuf::from("component.tsx")));
-        assert!(is_typescript_file(&PathBuf::from("script.js")));
-        assert!(is_typescript_file(&PathBuf::from("component.jsx")));
-        assert!(is_typescript_file(&PathBuf::from("path/to/file.ts")));
+        // JavaScript/TypeScript files should be detected
+        assert!(is_javascript_file(&PathBuf::from("app.ts")));
+        assert!(is_javascript_file(&PathBuf::from("component.tsx")));
+        assert!(is_javascript_file(&PathBuf::from("script.js")));
+        assert!(is_javascript_file(&PathBuf::from("component.jsx")));
+        assert!(is_javascript_file(&PathBuf::from("path/to/file.ts")));
 
-        // Non-TypeScript files should not be detected
-        assert!(!is_typescript_file(&PathBuf::from("file.rs")));
-        assert!(!is_typescript_file(&PathBuf::from("file.py")));
-        assert!(!is_typescript_file(&PathBuf::from("file.txt")));
-        assert!(!is_typescript_file(&PathBuf::from("file")));
+        // Non-JavaScript files should not be detected
+        assert!(!is_javascript_file(&PathBuf::from("file.rs")));
+        assert!(!is_javascript_file(&PathBuf::from("file.py")));
+        assert!(!is_javascript_file(&PathBuf::from("file.txt")));
+        assert!(!is_javascript_file(&PathBuf::from("file")));
     }
 
     #[test]
@@ -252,9 +252,9 @@ mod tests {
     }
 
     #[test]
-    fn test_all_typescript_keywords_recognized() {
-        // Test that all keywords in TYPESCRIPT_KEYWORDS are properly recognized
-        for keyword in TYPESCRIPT_KEYWORDS {
+    fn test_all_javascript_keywords_recognized() {
+        // Test that all keywords in JAVASCRIPT_KEYWORDS are properly recognized
+        for keyword in JAVASCRIPT_KEYWORDS {
             let content = format!("{} ", keyword);
             let counts = count_keywords(&content);
             assert_eq!(

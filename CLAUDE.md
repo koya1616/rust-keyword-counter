@@ -15,7 +15,7 @@ docker compose exec rust-dev bash
 
 ## Language Selection
 
-The analyzer supports multiple programming languages. Use the `--language` or `-l` option to specify the target language.
+The analyzer supports multiple programming languages. Use the `--language` or `-l` option with `rust`/`rs` for Rust, or `js`/`ts` for JavaScript/TypeScript.
 
 ```bash
 # Run in Docker container
@@ -27,7 +27,7 @@ cargo run -- --language rust
 cargo run -- -l rust
 
 # Analyze TypeScript/JavaScript code
-cargo run -- --language typescript
+cargo run -- --language js
 cargo run -- -l ts
 ```
 
@@ -39,15 +39,15 @@ cargo run
 
 # Analyze specific directory or file
 cargo run -- --language rust /path/to/rust/project
-cargo run -- --language typescript src/
+cargo run -- --language js src/
 
 # Analyze single files
 cargo run -- --language rust src/main.rs
-cargo run -- --language typescript app.ts
+cargo run -- --language js app.ts
 
 # Analyze GitHub repositories
 cargo run -- --language rust https://github.com/rust-lang/rust
-cargo run -- --language typescript https://github.com/microsoft/typescript
+cargo run -- --language js https://github.com/microsoft/typescript
 ```
 
 ## Using Built Binary
@@ -61,7 +61,7 @@ cargo build --release
 
 # With arguments
 ./target/release/app --language rust --format json
-./target/release/app --language typescript /path/to/typescript/project
+./target/release/app --language js /path/to/typescript/project
 ./target/release/app --language rust https://github.com/rust-lang/rust
 ./target/release/app --help
 ## Output Formats
@@ -71,7 +71,7 @@ cargo build --release
 cargo run -- --language rust
 
 # JSON format
-cargo run -- --language typescript --format json
+cargo run -- --language js --format json
 
 # CSV format
 cargo run -- --language rust --format csv
@@ -85,7 +85,7 @@ cargo run -- --help
 
 # Language selection (long and short forms)
 cargo run -- --language rust
-cargo run -- -l typescript
+cargo run -- -l js
 
 # Format selection (long and short forms)
 cargo run -- --format json
@@ -126,13 +126,13 @@ cargo run -- --language rust https://github.com/tokio-rs/tokio
 cargo run -- --language rust https://github.com/serde-rs/serde
 
 # Analyze popular TypeScript projects
-cargo run -- --language typescript https://github.com/microsoft/typescript
-cargo run -- --language typescript https://github.com/angular/angular
-cargo run -- --language typescript https://github.com/vuejs/vue
+cargo run -- --language js https://github.com/microsoft/typescript
+cargo run -- --language js https://github.com/angular/angular
+cargo run -- --language js https://github.com/vuejs/vue
 
 # With different output formats
 cargo run -- --language rust --format json https://github.com/actix/actix-web
-cargo run -- --language typescript --format csv https://github.com/nestjs/nest
+cargo run -- --language js --format csv https://github.com/nestjs/nest
 ```
 
 The tool automatically:
@@ -184,11 +184,11 @@ docker compose exec rust-dev cargo test -- --no-capture
 
 # Run specific test module
 docker compose exec rust-dev cargo test rust::tests
-docker compose exec rust-dev cargo test typescript::tests
+docker compose exec rust-dev cargo test javascript::tests
 ```
 
 The test suite includes:
-- **20 unit tests** covering all major functionality
-- **Language-specific tests** for both Rust and TypeScript modules
+- **21 unit tests** covering all major functionality
+- **Language-specific tests** for both Rust and JavaScript modules
 - **Edge case testing** for error handling and input validation
 - **Mock tests** for network-dependent functionality (avoiding authentication prompts)
