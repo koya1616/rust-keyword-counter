@@ -26,6 +26,10 @@ cargo run
 # Analyze specific directory or file
 cargo run -- /path/to/rust/project
 cargo run -- src/main.rs
+
+# Analyze GitHub repositories
+cargo run -- https://github.com/rust-lang/rust
+cargo run -- https://github.com/tokio-rs/tokio
 ```
 
 ## Using Built Binary
@@ -40,6 +44,7 @@ cargo build --release
 # With arguments
 ./target/release/app --format json
 ./target/release/app /path/to/rust/project
+./target/release/app https://github.com/rust-lang/rust
 ./target/release/app --help
 ## Output Formats
 
@@ -71,3 +76,22 @@ cargo run -- -f json
 - Skips `target/`, `.git/`, and `node_modules/` directories
 - Tracks 60+ Rust keywords including primitives, control flow, and reserved words
 - Multiple output formats for integration with other tools
+- **GitHub repository support** - directly analyze any public GitHub repository by URL
+
+## GitHub Repository Analysis
+
+```bash
+# Analyze popular Rust projects
+cargo run -- https://github.com/rust-lang/rust
+cargo run -- https://github.com/tokio-rs/tokio
+cargo run -- https://github.com/serde-rs/serde
+
+# With different output formats
+cargo run -- --format json https://github.com/actix/actix-web
+cargo run -- --format csv https://github.com/clap-rs/clap
+```
+
+The tool automatically:
+- Clones the repository to a temporary directory
+- Analyzes all `.rs` files in the repository
+- Cleans up the temporary directory after analysis
