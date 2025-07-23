@@ -26,7 +26,7 @@ pub fn analyze_directory(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let path = Path::new(path);
 
-    if path.is_file() && path.extension().map_or(false, |ext| ext == "rs") {
+    if path.is_file() && is_rust_file(&path) {
         eprintln!("Analyzing file: {}", path.display());
         analyze_file(path, total_counts)?;
         *file_count += 1;
@@ -39,7 +39,7 @@ pub fn analyze_directory(
             if entry_path.is_dir() && !should_skip_dir(&entry_path) {
                 eprintln!("Entering directory: {}", entry_path.display());
                 analyze_directory(entry_path.to_str().unwrap(), total_counts, file_count)?;
-            } else if entry_path.extension().map_or(false, |ext| ext == "rs") {
+            } else if is_rust_file(&entry_path) {
                 eprintln!("Analyzing file: {}", entry_path.display());
                 analyze_file(&entry_path, total_counts)?;
                 *file_count += 1;
@@ -57,6 +57,10 @@ pub fn should_skip_dir(path: &Path) -> bool {
     } else {
         false
     }
+}
+
+pub fn is_rust_file(path: &Path) -> bool {
+    path.extension().map_or(false, |ext| ext == "rs")
 }
 
 pub fn analyze_file(
@@ -176,5 +180,42 @@ mod tests {
                 keyword
             );
         }
+    }
+
+    #[test]
+    fn test_is_rust_file() {
+        use std::path::PathBuf;
+
+        // Rust files should be detected
+        assert!(is_rust_file(&PathBuf::from("main.rs")));
+        assert!(is_rust_file(&PathBuf::from("lib.rs")));
+        assert!(is_rust_file(&PathBuf::from("mod.rs")));
+        assert!(is_rust_file(&PathBuf::from("src/main.rs")));
+        assert!(is_rust_file(&PathBuf::from("/absolute/path/file.rs")));
+        assert!(is_rust_file(&PathBuf::from("./relative/path/file.rs")));
+
+        // Non-Rust files should not be detected
+        assert!(!is_rust_file(&PathBuf::from("file.ts")));
+        assert!(!is_rust_file(&PathBuf::from("file.js")));
+        assert!(!is_rust_file(&PathBuf::from("file.py")));
+        assert!(!is_rust_file(&PathBuf::from("file.txt")));
+        assert!(!is_rust_file(&PathBuf::from("file.md")));
+        assert!(!is_rust_file(&PathBuf::from("file")));
+        assert!(!is_rust_file(&PathBuf::from("main.rs.bak")));
+        assert!(!is_rust_file(&PathBuf::from("Cargo.toml")));
+    }
+
+    #[test]
+    fn test_analyze_file_error_cases() {
+        use std::path::PathBuf;
+        let mut counts = HashMap::new();
+
+        // Test with non-existent file
+        let result = analyze_file(&PathBuf::from("non_existent_file.rs"), &mut counts);
+        assert!(result.is_err());
+
+        // Test with directory instead of file (should error)
+        let result = analyze_file(&PathBuf::from("/"), &mut counts);
+        assert!(result.is_err());
     }
 }

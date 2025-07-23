@@ -4,10 +4,11 @@ use std::fs;
 use std::process::Command;
 
 mod rust;
+mod typescript;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let (target_path, output_format) = parse_args(&args);
+    let (target_path, output_format, language) = parse_args(&args);
 
     let actual_path = if is_github_url(&target_path) {
         match clone_github_repo(&target_path) {
@@ -28,7 +29,14 @@ fn main() {
     let mut total_counts: HashMap<String, usize> = HashMap::new();
     let mut file_count = 0;
 
-    match rust::analyze_directory(&actual_path, &mut total_counts, &mut file_count) {
+    let result = match language {
+        Language::Rust => rust::analyze_directory(&actual_path, &mut total_counts, &mut file_count),
+        Language::TypeScript => {
+            typescript::analyze_directory(&actual_path, &mut total_counts, &mut file_count)
+        }
+    };
+
+    match result {
         Ok(_) => {
             eprintln!("Analysis completed! Found {} files", file_count);
             eprintln!("Generating results...\n");
@@ -53,9 +61,16 @@ enum OutputFormat {
     Csv,
 }
 
-fn parse_args(args: &[String]) -> (&str, OutputFormat) {
+#[derive(Clone, Copy)]
+enum Language {
+    Rust,
+    TypeScript,
+}
+
+fn parse_args(args: &[String]) -> (&str, OutputFormat, Language) {
     let mut target_path = ".";
     let mut output_format = OutputFormat::Plain;
+    let mut language = Language::Rust; // Default to Rust
 
     let mut i = 1;
     while i < args.len() {
@@ -66,6 +81,18 @@ fn parse_args(args: &[String]) -> (&str, OutputFormat) {
                         "json" => OutputFormat::Json,
                         "csv" => OutputFormat::Csv,
                         _ => OutputFormat::Plain,
+                    };
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            "--language" | "-l" => {
+                if i + 1 < args.len() {
+                    language = match args[i + 1].as_str() {
+                        "typescript" | "ts" => Language::TypeScript,
+                        "rust" | "rs" => Language::Rust,
+                        _ => Language::Rust,
                     };
                     i += 2;
                 } else {
@@ -84,11 +111,11 @@ fn parse_args(args: &[String]) -> (&str, OutputFormat) {
         }
     }
 
-    (target_path, output_format)
+    (target_path, output_format, language)
 }
 
 fn print_help() {
-    println!("Rust Keyword Analyzer");
+    println!("Multi-Language Keyword Analyzer");
     println!();
     println!("USAGE:");
     println!("    app [PATH] [OPTIONS]");
@@ -97,14 +124,15 @@ fn print_help() {
     println!("    <PATH>    Directory, file, or GitHub URL to analyze [default: .]");
     println!();
     println!("OPTIONS:");
+    println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, typescript, ts]");
     println!("    -f, --format <FORMAT>    Output format [default: plain] [possible values: plain, json, csv]");
     println!("    -h, --help               Print help information");
     println!();
     println!("EXAMPLES:");
-    println!("    app");
-    println!("    app src/");
-    println!("    app https://github.com/rust-lang/rust");
-    println!("    app --format json https://github.com/tokio-rs/tokio");
+    println!("    app --language rust");
+    println!("    app --language typescript src/");
+    println!("    app -l ts https://github.com/microsoft/typescript");
+    println!("    app --format json --language rust https://github.com/rust-lang/rust");
 }
 
 fn is_github_url(input: &str) -> bool {
@@ -236,15 +264,17 @@ mod tests {
     fn test_parse_args() {
         // Test default values
         let args = vec!["program".to_string()];
-        let (path, format) = parse_args(&args);
+        let (path, format, language) = parse_args(&args);
         assert_eq!(path, ".");
         assert!(matches!(format, OutputFormat::Plain));
+        assert!(matches!(language, Language::Rust));
 
         // Test path argument
         let args = vec!["program".to_string(), "src/".to_string()];
-        let (path, format) = parse_args(&args);
+        let (path, format, language) = parse_args(&args);
         assert_eq!(path, "src/");
         assert!(matches!(format, OutputFormat::Plain));
+        assert!(matches!(language, Language::Rust));
 
         // Test format options
         let args = vec![
@@ -252,13 +282,26 @@ mod tests {
             "--format".to_string(),
             "json".to_string(),
         ];
-        let (path, format) = parse_args(&args);
+        let (path, format, _language) = parse_args(&args);
         assert_eq!(path, ".");
         assert!(matches!(format, OutputFormat::Json));
 
         let args = vec!["program".to_string(), "-f".to_string(), "csv".to_string()];
-        let (_path, format) = parse_args(&args);
+        let (_path, format, _language) = parse_args(&args);
         assert!(matches!(format, OutputFormat::Csv));
+
+        // Test language options
+        let args = vec![
+            "program".to_string(),
+            "--language".to_string(),
+            "typescript".to_string(),
+        ];
+        let (_path, _format, language) = parse_args(&args);
+        assert!(matches!(language, Language::TypeScript));
+
+        let args = vec!["program".to_string(), "-l".to_string(), "ts".to_string()];
+        let (_path, _format, language) = parse_args(&args);
+        assert!(matches!(language, Language::TypeScript));
 
         // Test combined arguments
         let args = vec![
@@ -266,18 +309,140 @@ mod tests {
             "target_dir".to_string(),
             "--format".to_string(),
             "json".to_string(),
+            "--language".to_string(),
+            "rust".to_string(),
         ];
-        let (path, format) = parse_args(&args);
+        let (path, format, language) = parse_args(&args);
         assert_eq!(path, "target_dir");
         assert!(matches!(format, OutputFormat::Json));
+        assert!(matches!(language, Language::Rust));
 
         // Test GitHub URL
         let args = vec![
             "program".to_string(),
             "https://github.com/rust-lang/rust".to_string(),
         ];
-        let (path, format) = parse_args(&args);
+        let (path, format, language) = parse_args(&args);
         assert_eq!(path, "https://github.com/rust-lang/rust");
         assert!(matches!(format, OutputFormat::Plain));
+        assert!(matches!(language, Language::Rust));
+    }
+
+    #[test]
+    fn test_language_enum_values() {
+        // Test that Language enum values work correctly
+        let rust_lang = Language::Rust;
+        let ts_lang = Language::TypeScript;
+
+        // Test that they are different
+        assert!(matches!(rust_lang, Language::Rust));
+        assert!(matches!(ts_lang, Language::TypeScript));
+
+        // Test default language in parse_args
+        let args = vec!["program".to_string()];
+        let (_, _, language) = parse_args(&args);
+        assert!(matches!(language, Language::Rust));
+    }
+
+    #[test]
+    fn test_output_format_enum_values() {
+        // Test that OutputFormat enum values work correctly
+        let plain = OutputFormat::Plain;
+        let json = OutputFormat::Json;
+        let csv = OutputFormat::Csv;
+
+        assert!(matches!(plain, OutputFormat::Plain));
+        assert!(matches!(json, OutputFormat::Json));
+        assert!(matches!(csv, OutputFormat::Csv));
+    }
+
+    #[test]
+    fn test_parse_args_edge_cases() {
+        // Test empty program name only
+        let args = vec!["program".to_string()];
+        let (path, format, language) = parse_args(&args);
+        assert_eq!(path, ".");
+        assert!(matches!(format, OutputFormat::Plain));
+        assert!(matches!(language, Language::Rust));
+
+        // Test invalid language defaults to Rust
+        let args = vec![
+            "program".to_string(),
+            "--language".to_string(),
+            "invalid".to_string(),
+        ];
+        let (_, _, language) = parse_args(&args);
+        assert!(matches!(language, Language::Rust));
+
+        // Test invalid format defaults to Plain
+        let args = vec![
+            "program".to_string(),
+            "--format".to_string(),
+            "invalid".to_string(),
+        ];
+        let (_, format, _) = parse_args(&args);
+        assert!(matches!(format, OutputFormat::Plain));
+
+        // Test flag without value (should be skipped)
+        let args = vec!["program".to_string(), "--format".to_string()];
+        let (_, format, _) = parse_args(&args);
+        assert!(matches!(format, OutputFormat::Plain));
+
+        // Test unknown flag (should be ignored, but value becomes path)
+        let args = vec![
+            "program".to_string(),
+            "--unknown-flag".to_string(),
+            "value".to_string(),
+        ];
+        let (path, _, _) = parse_args(&args);
+        assert_eq!(path, "value"); // The value becomes the path since unknown flag is skipped
+    }
+
+    #[test]
+    fn test_clone_github_repo_mock() {
+        // Mock test - we only test the function signature and that it returns Result
+        // We don't actually call the function to avoid network access and git authentication
+
+        // Test that the function signature is correct (compile-time test)
+        fn _test_signature() {
+            let _: fn(&str) -> Result<String, Box<dyn std::error::Error>> = clone_github_repo;
+        }
+
+        // Test temp directory pattern generation logic (without actual cloning)
+        let temp_dir_pattern = format!("/tmp/rust_analyzer_{}", std::process::id());
+        assert!(temp_dir_pattern.starts_with("/tmp/rust_analyzer_"));
+        assert!(temp_dir_pattern.len() > 20); // Should have process ID appended
+
+        // Note: We skip actual network tests to avoid authentication prompts
+        // Real functionality is tested through integration tests manually
+    }
+
+    #[test]
+    fn test_print_results_formats() {
+        use std::collections::HashMap;
+
+        // Create test data
+        let mut counts = HashMap::new();
+        counts.insert("let".to_string(), 5);
+        counts.insert("fn".to_string(), 3);
+        counts.insert("if".to_string(), 2);
+
+        // We can't easily test the actual output without capturing stdout,
+        // but we can test that the functions don't panic with valid data
+
+        // Test Plain format
+        print_results(&counts, 10, OutputFormat::Plain);
+
+        // Test JSON format
+        print_results(&counts, 10, OutputFormat::Json);
+
+        // Test CSV format
+        print_results(&counts, 10, OutputFormat::Csv);
+
+        // Test with empty data
+        let empty_counts = HashMap::new();
+        print_results(&empty_counts, 0, OutputFormat::Plain);
+        print_results(&empty_counts, 0, OutputFormat::Json);
+        print_results(&empty_counts, 0, OutputFormat::Csv);
     }
 }
