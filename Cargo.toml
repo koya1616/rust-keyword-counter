@@ -6,6 +6,9 @@ members = [
     "shared-lib"
 ]
 
+[workspace.metadata.rust-analyzer]
+rustfmt = { overrideCommand = ["rustfmt", "--edition=2021"] }
+
 [workspace.dependencies]
 keyword-analyzer-shared = { path = "shared-lib" }
 tokio = { version = "1", features = ["full"] }

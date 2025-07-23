@@ -1,0 +1,30 @@
+# Rustfmt Configuration for Multi-Language Keyword Analyzer Workspace
+# Stable channel compatible configuration
+
+# Edition and Language Settings
+edition = "2021"
+
+# Code Style (stable options only)
+max_width = 100
+hard_tabs = false
+tab_spaces = 2
+newline_style = "Unix"
+
+# String and Array Formatting
+array_width = 60
+chain_width = 60
+
+# Expression and Statement Formatting
+use_small_heuristics = "Default"
+
+# Match and Closure Formatting
+match_block_trailing_comma = false
+
+# Advanced Options
+merge_derives = true
+use_try_shorthand = false
+use_field_init_shorthand = false
+force_explicit_abi = true
+
+# Import reordering (stable)
+reorder_imports = true

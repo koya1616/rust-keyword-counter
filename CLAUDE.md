@@ -363,6 +363,27 @@ docker compose exec rust-dev cargo build --release
 - `cli/`: Command-line interface using shared library
 - `api-server/`: REST API server using shared library
 
+### Code Formatting
+
+The project uses rustfmt for consistent code formatting:
+
+```bash
+# Format all code
+make fmt
+# or
+docker compose exec rust-dev cargo fmt --all
+
+# Check formatting
+make fmt-check
+# or  
+docker compose exec rust-dev cargo fmt --all -- --check
+
+# Run all development checks
+make check  # fmt-check + clippy + test
+```
+
+Configuration is in `rustfmt.toml` and applies to all workspace members.
+
 ### Adding New Languages
 1. Create new module in `shared-lib/src/`
 2. Add language enum variant in `shared-lib/src/lib.rs`
@@ -375,5 +396,6 @@ docker compose exec rust-dev cargo build --release
 - Follow existing code patterns
 - Add tests for new functionality
 - Update documentation
-- Use `cargo fmt` for formatting
-- Run `cargo clippy` for linting
+- Use `cargo fmt` for code formatting (configured in `rustfmt.toml`)
+- Run `cargo clippy` for linting and best practices
+- Use `make check` to run all development checks before committing
