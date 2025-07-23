@@ -91,6 +91,9 @@ cargo run -- --language js --format json
 # CSV format
 cargo run -- --language rust --format csv
 
+# HTML format
+cargo run -- --language rust --format html
+
 # Ruby with different formats
 cargo run -- --language ruby --format json
 
@@ -116,8 +119,9 @@ cargo run -- -f csv
 
 # Combined options
 cargo run -- -l ts -f json src/
-cargo run -- -l rb -f csv lib/
+cargo run -- -l rb -f csv lib/  
 cargo run -- -l go -f json cmd/
+cargo run -- -l rust -f html src/
 ```
 
 ## Supported Languages
@@ -147,7 +151,7 @@ cargo run -- -l go -f json cmd/
 - **Multi-language support**: Rust, TypeScript/JavaScript, Ruby, and Go analysis
 - **Comprehensive keyword tracking**: Latest language specifications supported
 - **Recursive directory scanning** with intelligent directory skipping
-- **Multiple output formats** (Plain, JSON, CSV) for integration with other tools
+- **Multiple output formats** (Plain, JSON, CSV, HTML) for integration with other tools
 - **GitHub repository support** - directly analyze any public GitHub repository by URL
 - **Real-time progress display** - shows current file being processed and count
 - **Automatic cleanup** - temporary directories are cleaned up after analysis
@@ -180,6 +184,7 @@ cargo run -- --language rust --format json https://github.com/actix/actrix-web
 cargo run -- --language js --format csv https://github.com/nestjs/nest
 cargo run -- --language ruby --format json https://github.com/fastlane/fastlane
 cargo run -- --language go --format json https://github.com/hashicorp/terraform
+cargo run -- --language rust --format html https://github.com/rust-lang/rust
 ```
 
 The tool automatically:

@@ -68,6 +68,7 @@ enum OutputFormat {
     Plain,
     Json,
     Csv,
+    Html,
 }
 
 #[derive(Clone, Copy)]
@@ -92,6 +93,7 @@ fn parse_args(args: &[String]) -> (&str, OutputFormat, Language) {
                     output_format = match args[i + 1].as_str() {
                         "json" => OutputFormat::Json,
                         "csv" => OutputFormat::Csv,
+                        "html" => OutputFormat::Html,
                         _ => OutputFormat::Plain,
                     };
                     i += 2;
@@ -140,7 +142,7 @@ fn print_help() {
     println!();
     println!("OPTIONS:");
     println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, js, ts, ruby, rb, go, golang, python, py]");
-    println!("    -f, --format <FORMAT>    Output format [default: plain] [possible values: plain, json, csv]");
+    println!("    -f, --format <FORMAT>    Output format [default: plain] [possible values: plain, json, csv, html]");
     println!("    -h, --help               Print help information");
     println!();
     println!("EXAMPLES:");
@@ -205,6 +207,7 @@ fn print_results(
         OutputFormat::Plain => print_plain(&sorted_counts, file_count, language),
         OutputFormat::Json => print_json(&sorted_counts, file_count),
         OutputFormat::Csv => print_csv(&sorted_counts, file_count),
+        OutputFormat::Html => print_html(&sorted_counts, file_count, language),
     }
 }
 
@@ -282,6 +285,104 @@ fn print_csv(sorted_counts: &[(&String, &usize)], file_count: usize) {
     }
 }
 
+fn print_html(sorted_counts: &[(&String, &usize)], file_count: usize, language: Language) {
+    let language_name = match language {
+        Language::Rust => "Rust",
+        Language::JavaScript => "JavaScript/TypeScript",
+        Language::Ruby => "Ruby",
+        Language::Golang => "Go",
+        Language::Python => "Python",
+    };
+
+    let total_keywords: usize = sorted_counts
+        .iter()
+        .map(|(_, count)| **count)
+        .sum();
+
+    println!("<!DOCTYPE html>");
+    println!("<html lang=\"en\">");
+    println!("<head>");
+    println!("    <meta charset=\"UTF-8\">");
+    println!("    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
+    println!("    <title>{} Keyword Analysis Results</title>", language_name);
+    println!("    <style>");
+    println!("        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background-color: #f5f5f5; }}");
+    println!("        .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}");
+    println!("        h1 {{ color: #333; text-align: center; margin-bottom: 30px; border-bottom: 3px solid #007acc; padding-bottom: 10px; }}");
+    println!("        .summary {{ background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; border-left: 4px solid #007acc; }}");
+    println!("        .summary h2 {{ margin-top: 0; color: #495057; }}");
+    println!("        .stat {{ display: inline-block; margin-right: 30px; }}");
+    println!("        .stat-value {{ font-size: 24px; font-weight: bold; color: #007acc; }}");
+    println!("        .stat-label {{ font-size: 14px; color: #6c757d; }}");
+    println!("        .keywords-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}");
+    println!("        .keywords-table th {{ background: #007acc; color: white; padding: 12px; text-align: left; font-weight: 600; }}");
+    println!("        .keywords-table td {{ padding: 10px 12px; border-bottom: 1px solid #dee2e6; }}");
+    println!("        .keywords-table tr:nth-child(even) {{ background-color: #f8f9fa; }}");
+    println!("        .keywords-table tr:hover {{ background-color: #e3f2fd; }}");
+    println!("        .keyword {{ font-family: 'Consolas', 'Monaco', monospace; font-weight: 600; color: #495057; }}");
+    println!("        .count {{ font-weight: bold; color: #007acc; }}");
+    println!("        .progress-bar {{ width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden; }}");
+    println!("        .progress-fill {{ height: 100%; background: linear-gradient(90deg, #007acc, #40a9ff); transition: width 0.3s ease; }}");
+    println!("        .footer {{ text-align: center; margin-top: 30px; color: #6c757d; font-size: 12px; }}");
+    println!("    </style>");
+    println!("</head>");
+    println!("<body>");
+    println!("    <div class=\"container\">");
+    println!("        <h1>{} Keyword Analysis Results</h1>", language_name);
+    println!("        <div class=\"summary\">");
+    println!("            <h2>Analysis Summary</h2>");
+    println!("            <div class=\"stat\">");
+    println!("                <div class=\"stat-value\">{}</div>", file_count);
+    println!("                <div class=\"stat-label\">Files Analyzed</div>");
+    println!("            </div>");
+    println!("            <div class=\"stat\">");
+    println!("                <div class=\"stat-value\">{}</div>", total_keywords);
+    println!("                <div class=\"stat-label\">Total Keywords Found</div>");
+    println!("            </div>");
+    println!("        </div>");
+
+    if !sorted_counts.is_empty() && total_keywords > 0 {
+        let max_count = sorted_counts.iter().map(|(_, count)| **count).max().unwrap_or(1);
+        
+        println!("        <table class=\"keywords-table\">");
+        println!("            <thead>");
+        println!("                <tr>");
+        println!("                    <th>Keyword</th>");
+        println!("                    <th>Count</th>");
+        println!("                    <th>Distribution</th>");
+        println!("                </tr>");
+        println!("            </thead>");
+        println!("            <tbody>");
+
+        for (keyword, count) in sorted_counts {
+            if **count > 0 {
+                let percentage = ((**count as f64) / (max_count as f64) * 100.0) as u32;
+                println!("                <tr>");
+                println!("                    <td class=\"keyword\">{}</td>", keyword);
+                println!("                    <td class=\"count\">{}</td>", count);
+                println!("                    <td>");
+                println!("                        <div class=\"progress-bar\">");
+                println!("                            <div class=\"progress-fill\" style=\"width: {}%;\"></div>", percentage);
+                println!("                        </div>");
+                println!("                    </td>");
+                println!("                </tr>");
+            }
+        }
+
+        println!("            </tbody>");
+        println!("        </table>");
+    } else {
+        println!("        <p style=\"text-align: center; color: #6c757d; font-style: italic;\">No keywords found in the analyzed files.</p>");
+    }
+
+    println!("        <div class=\"footer\">");
+    println!("            <p>Generated by Multi-Language Keyword Analyzer</p>");
+    println!("        </div>");
+    println!("    </div>");
+    println!("</body>");
+    println!("</html>");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -340,6 +441,10 @@ mod tests {
         let args = vec!["program".to_string(), "-f".to_string(), "csv".to_string()];
         let (_path, format, _language) = parse_args(&args);
         assert!(matches!(format, OutputFormat::Csv));
+
+        let args = vec!["program".to_string(), "--format".to_string(), "html".to_string()];
+        let (_path, format, _language) = parse_args(&args);
+        assert!(matches!(format, OutputFormat::Html));
 
         // Test language options
         let args = vec![
@@ -433,10 +538,12 @@ mod tests {
         let plain = OutputFormat::Plain;
         let json = OutputFormat::Json;
         let csv = OutputFormat::Csv;
+        let html = OutputFormat::Html;
 
         assert!(matches!(plain, OutputFormat::Plain));
         assert!(matches!(json, OutputFormat::Json));
         assert!(matches!(csv, OutputFormat::Csv));
+        assert!(matches!(html, OutputFormat::Html));
     }
 
     #[test]
@@ -557,10 +664,14 @@ mod tests {
         // Test CSV format
         print_results(&counts, 10, OutputFormat::Csv, Language::Ruby);
 
+        // Test HTML format
+        print_results(&counts, 10, OutputFormat::Html, Language::Golang);
+
         // Test with empty data
         let empty_counts = HashMap::new();
         print_results(&empty_counts, 0, OutputFormat::Plain, Language::Golang);
         print_results(&empty_counts, 0, OutputFormat::Json, Language::Rust);
         print_results(&empty_counts, 0, OutputFormat::Csv, Language::JavaScript);
+        print_results(&empty_counts, 0, OutputFormat::Html, Language::Python);
     }
 }

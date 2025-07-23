@@ -13,12 +13,6 @@ The multi-language keyword analyzer is now functional with:
 
 ## Future Enhancements
 
-### High Priority
-- Python言語サポート追加
-
-### Medium Priority
-- HTML出力
-
 ### Low Priority
 - グラフ生成
 
