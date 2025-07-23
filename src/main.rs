@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::process::Command;
 
 mod golang;
@@ -11,7 +12,7 @@ mod rust;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let (target_path, output_format, language) = parse_args(&args);
+    let (target_path, output_format, language, output_file) = parse_args(&args);
 
     let actual_path = if is_git_url(&target_path) {
         match clone_git_repo(&target_path) {
@@ -50,7 +51,13 @@ fn main() {
         Ok(_) => {
             eprintln!("Analysis completed! Found {} files", file_count);
             eprintln!("Generating results...\n");
-            print_results(&total_counts, file_count, output_format, language);
+            print_results(
+                &total_counts,
+                file_count,
+                output_format,
+                language,
+                output_file,
+            );
         }
         Err(e) => {
             eprintln!("Error: {}", e);
@@ -80,10 +87,11 @@ enum Language {
     Python,
 }
 
-fn parse_args(args: &[String]) -> (&str, OutputFormat, Language) {
+fn parse_args(args: &[String]) -> (&str, OutputFormat, Language, Option<String>) {
     let mut target_path = ".";
     let mut output_format = OutputFormat::Plain;
     let mut language = Language::Rust; // Default to Rust
+    let mut output_file: Option<String> = None;
 
     let mut i = 1;
     while i < args.len() {
@@ -116,6 +124,14 @@ fn parse_args(args: &[String]) -> (&str, OutputFormat, Language) {
                     i += 1;
                 }
             }
+            "--output" | "-o" => {
+                if i + 1 < args.len() {
+                    output_file = Some(args[i + 1].clone());
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
             "--help" | "-h" => {
                 print_help();
                 std::process::exit(0);
@@ -128,7 +144,7 @@ fn parse_args(args: &[String]) -> (&str, OutputFormat, Language) {
         }
     }
 
-    (target_path, output_format, language)
+    (target_path, output_format, language, output_file)
 }
 
 fn print_help() {
@@ -143,6 +159,7 @@ fn print_help() {
     println!("OPTIONS:");
     println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, js, ts, ruby, rb, go, golang, python, py]");
     println!("    -f, --format <FORMAT>    Output format [default: plain] [possible values: plain, json, csv, html]");
+    println!("    -o, --output <FILE>      Output file path (for json, csv, html formats)");
     println!("    -h, --help               Print help information");
     println!();
     println!("EXAMPLES:");
@@ -156,6 +173,9 @@ fn print_help() {
     println!("    app -l rs gitlab.com/gitlab-org/gitlab");
     println!("    app -l go https://github.com/golang/go");
     println!("    app --format json --language python https://github.com/django/django");
+    println!("    app --format json --output results.json --language rust src/");
+    println!("    app --format html --output analysis.html --language js");
+    println!("    app -f csv -o data.csv -l python");
 }
 
 fn is_git_url(input: &str) -> bool {
@@ -199,15 +219,37 @@ fn print_results(
     file_count: usize,
     format: OutputFormat,
     language: Language,
+    output_file: Option<String>,
 ) {
     let mut sorted_counts: Vec<_> = counts.iter().collect();
     sorted_counts.sort_by(|a, b| b.1.cmp(a.1));
 
     match format {
         OutputFormat::Plain => print_plain(&sorted_counts, file_count, language),
-        OutputFormat::Json => print_json(&sorted_counts, file_count),
-        OutputFormat::Csv => print_csv(&sorted_counts, file_count),
-        OutputFormat::Html => print_html(&sorted_counts, file_count, language),
+        OutputFormat::Json => {
+            if let Some(path) = output_file {
+                write_json_to_file(&sorted_counts, file_count, &path);
+            } else {
+                let default_file = generate_default_filename(language, "json");
+                write_json_to_file(&sorted_counts, file_count, &default_file);
+            }
+        }
+        OutputFormat::Csv => {
+            if let Some(path) = output_file {
+                write_csv_to_file(&sorted_counts, file_count, &path);
+            } else {
+                let default_file = generate_default_filename(language, "csv");
+                write_csv_to_file(&sorted_counts, file_count, &default_file);
+            }
+        }
+        OutputFormat::Html => {
+            if let Some(path) = output_file {
+                write_html_to_file(&sorted_counts, file_count, language, &path);
+            } else {
+                let default_file = generate_default_filename(language, "html");
+                write_html_to_file(&sorted_counts, file_count, language, &default_file);
+            }
+        }
     }
 }
 
@@ -237,55 +279,145 @@ fn print_plain(sorted_counts: &[(&String, &usize)], file_count: usize, language:
     }
 }
 
-fn print_json(sorted_counts: &[(&String, &usize)], file_count: usize) {
-    println!("{{");
-    println!("  \"files_analyzed\": {},", file_count);
-    println!(
-        "  \"total_keywords\": {},",
-        sorted_counts
-            .iter()
-            .map(|(_, count)| **count)
-            .sum::<usize>()
-    );
-    println!("  \"keywords\": {{");
+fn generate_default_filename(language: Language, extension: &str) -> String {
+    let language_name = match language {
+        Language::Rust => "rust",
+        Language::JavaScript => "javascript",
+        Language::Ruby => "ruby",
+        Language::Golang => "go",
+        Language::Python => "python",
+    };
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    format!(
+        "keyword_analysis_{}_{}.{}",
+        language_name, timestamp, extension
+    )
+}
+
+fn write_json_to_file(sorted_counts: &[(&String, &usize)], file_count: usize, file_path: &str) {
+    let mut file = match fs::File::create(file_path) {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("Error creating file {}: {}", file_path, e);
+            return;
+        }
+    };
+
+    let total_keywords = sorted_counts
+        .iter()
+        .map(|(_, count)| **count)
+        .sum::<usize>();
+
+    if let Err(e) = writeln!(file, "{{") {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+    if let Err(e) = writeln!(file, "  \"files_analyzed\": {},", file_count) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+    if let Err(e) = writeln!(file, "  \"total_keywords\": {},", total_keywords) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+    if let Err(e) = writeln!(file, "  \"keywords\": {{") {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
 
     let mut first = true;
     for (keyword, count) in sorted_counts {
         if **count > 0 {
             if !first {
-                println!(",");
+                if let Err(e) = writeln!(file, ",") {
+                    eprintln!("Error writing to file: {}", e);
+                    return;
+                }
             }
-            print!("    \"{}\": {}", keyword, count);
+            if let Err(e) = write!(file, "    \"{}\": {}", keyword, count) {
+                eprintln!("Error writing to file: {}", e);
+                return;
+            }
             first = false;
         }
     }
 
     if !first {
-        println!();
+        if let Err(e) = writeln!(file) {
+            eprintln!("Error writing to file: {}", e);
+            return;
+        }
     }
-    println!("  }}");
-    println!("}}");
+    if let Err(e) = writeln!(file, "  }}") {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+    if let Err(e) = writeln!(file, "}}") {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    println!("JSON results written to: {}", file_path);
 }
 
-fn print_csv(sorted_counts: &[(&String, &usize)], file_count: usize) {
-    println!("keyword,count");
-    println!("_files_analyzed,{}", file_count);
-    println!(
-        "_total_keywords,{}",
-        sorted_counts
-            .iter()
-            .map(|(_, count)| **count)
-            .sum::<usize>()
-    );
+fn write_csv_to_file(sorted_counts: &[(&String, &usize)], file_count: usize, file_path: &str) {
+    let mut file = match fs::File::create(file_path) {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("Error creating file {}: {}", file_path, e);
+            return;
+        }
+    };
+
+    let total_keywords = sorted_counts
+        .iter()
+        .map(|(_, count)| **count)
+        .sum::<usize>();
+
+    if let Err(e) = writeln!(file, "keyword,count") {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+    if let Err(e) = writeln!(file, "_files_analyzed,{}", file_count) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+    if let Err(e) = writeln!(file, "_total_keywords,{}", total_keywords) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
 
     for (keyword, count) in sorted_counts {
         if **count > 0 {
-            println!("{},{}", keyword, count);
+            if let Err(e) = writeln!(file, "{},{}", keyword, count) {
+                eprintln!("Error writing to file: {}", e);
+                return;
+            }
         }
     }
+
+    println!("CSV results written to: {}", file_path);
 }
 
-fn print_html(sorted_counts: &[(&String, &usize)], file_count: usize, language: Language) {
+fn write_html_to_file(
+    sorted_counts: &[(&String, &usize)],
+    file_count: usize,
+    language: Language,
+    file_path: &str,
+) {
+    let mut file = match fs::File::create(file_path) {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("Error creating file {}: {}", file_path, e);
+            return;
+        }
+    };
+
     let language_name = match language {
         Language::Rust => "Rust",
         Language::JavaScript => "JavaScript/TypeScript",
@@ -294,93 +426,135 @@ fn print_html(sorted_counts: &[(&String, &usize)], file_count: usize, language: 
         Language::Python => "Python",
     };
 
-    let total_keywords: usize = sorted_counts
-        .iter()
-        .map(|(_, count)| **count)
-        .sum();
+    let total_keywords: usize = sorted_counts.iter().map(|(_, count)| **count).sum();
 
-    println!("<!DOCTYPE html>");
-    println!("<html lang=\"en\">");
-    println!("<head>");
-    println!("    <meta charset=\"UTF-8\">");
-    println!("    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
-    println!("    <title>{} Keyword Analysis Results</title>", language_name);
-    println!("    <style>");
-    println!("        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background-color: #f5f5f5; }}");
-    println!("        .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}");
-    println!("        h1 {{ color: #333; text-align: center; margin-bottom: 30px; border-bottom: 3px solid #007acc; padding-bottom: 10px; }}");
-    println!("        .summary {{ background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; border-left: 4px solid #007acc; }}");
-    println!("        .summary h2 {{ margin-top: 0; color: #495057; }}");
-    println!("        .stat {{ display: inline-block; margin-right: 30px; }}");
-    println!("        .stat-value {{ font-size: 24px; font-weight: bold; color: #007acc; }}");
-    println!("        .stat-label {{ font-size: 14px; color: #6c757d; }}");
-    println!("        .keywords-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}");
-    println!("        .keywords-table th {{ background: #007acc; color: white; padding: 12px; text-align: left; font-weight: 600; }}");
-    println!("        .keywords-table td {{ padding: 10px 12px; border-bottom: 1px solid #dee2e6; }}");
-    println!("        .keywords-table tr:nth-child(even) {{ background-color: #f8f9fa; }}");
-    println!("        .keywords-table tr:hover {{ background-color: #e3f2fd; }}");
-    println!("        .keyword {{ font-family: 'Consolas', 'Monaco', monospace; font-weight: 600; color: #495057; }}");
-    println!("        .count {{ font-weight: bold; color: #007acc; }}");
-    println!("        .progress-bar {{ width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden; }}");
-    println!("        .progress-fill {{ height: 100%; background: linear-gradient(90deg, #007acc, #40a9ff); transition: width 0.3s ease; }}");
-    println!("        .footer {{ text-align: center; margin-top: 30px; color: #6c757d; font-size: 12px; }}");
-    println!("    </style>");
-    println!("</head>");
-    println!("<body>");
-    println!("    <div class=\"container\">");
-    println!("        <h1>{} Keyword Analysis Results</h1>", language_name);
-    println!("        <div class=\"summary\">");
-    println!("            <h2>Analysis Summary</h2>");
-    println!("            <div class=\"stat\">");
-    println!("                <div class=\"stat-value\">{}</div>", file_count);
-    println!("                <div class=\"stat-label\">Files Analyzed</div>");
-    println!("            </div>");
-    println!("            <div class=\"stat\">");
-    println!("                <div class=\"stat-value\">{}</div>", total_keywords);
-    println!("                <div class=\"stat-label\">Total Keywords Found</div>");
-    println!("            </div>");
-    println!("        </div>");
+    let html_content = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{} Keyword Analysis Results</title>
+    <style>
+        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background-color: #f5f5f5; }}
+        .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        h1 {{ color: #333; text-align: center; margin-bottom: 30px; border-bottom: 3px solid #007acc; padding-bottom: 10px; }}
+        .summary {{ background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; border-left: 4px solid #007acc; }}
+        .summary h2 {{ margin-top: 0; color: #495057; }}
+        .stat {{ display: inline-block; margin-right: 30px; }}
+        .stat-value {{ font-size: 24px; font-weight: bold; color: #007acc; }}
+        .stat-label {{ font-size: 14px; color: #6c757d; }}
+        .keywords-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+        .keywords-table th {{ background: #007acc; color: white; padding: 12px; text-align: left; font-weight: 600; }}
+        .keywords-table td {{ padding: 10px 12px; border-bottom: 1px solid #dee2e6; }}
+        .keywords-table tr:nth-child(even) {{ background-color: #f8f9fa; }}
+        .keywords-table tr:hover {{ background-color: #e3f2fd; }}
+        .keyword {{ font-family: 'Consolas', 'Monaco', monospace; font-weight: 600; color: #495057; }}
+        .count {{ font-weight: bold; color: #007acc; }}
+        .progress-bar {{ width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden; }}
+        .progress-fill {{ height: 100%; background: linear-gradient(90deg, #007acc, #40a9ff); transition: width 0.3s ease; }}
+        .footer {{ text-align: center; margin-top: 30px; color: #6c757d; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>{} Keyword Analysis Results</h1>
+        <div class="summary">
+            <h2>Analysis Summary</h2>
+            <div class="stat">
+                <div class="stat-value">{}</div>
+                <div class="stat-label">Files Analyzed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">{}</div>
+                <div class="stat-label">Total Keywords Found</div>
+            </div>
+        </div>"#,
+        language_name, language_name, file_count, total_keywords
+    );
+
+    if let Err(e) = write!(file, "{}", html_content) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
 
     if !sorted_counts.is_empty() && total_keywords > 0 {
-        let max_count = sorted_counts.iter().map(|(_, count)| **count).max().unwrap_or(1);
-        
-        println!("        <table class=\"keywords-table\">");
-        println!("            <thead>");
-        println!("                <tr>");
-        println!("                    <th>Keyword</th>");
-        println!("                    <th>Count</th>");
-        println!("                    <th>Distribution</th>");
-        println!("                </tr>");
-        println!("            </thead>");
-        println!("            <tbody>");
+        let max_count = sorted_counts
+            .iter()
+            .map(|(_, count)| **count)
+            .max()
+            .unwrap_or(1);
+
+        if let Err(e) = writeln!(
+            file,
+            r#"        <table class="keywords-table">
+            <thead>
+                <tr>
+                    <th>Keyword</th>
+                    <th>Count</th>
+                    <th>Distribution</th>
+                </tr>
+            </thead>
+            <tbody>"#
+        ) {
+            eprintln!("Error writing to file: {}", e);
+            return;
+        }
 
         for (keyword, count) in sorted_counts {
             if **count > 0 {
                 let percentage = ((**count as f64) / (max_count as f64) * 100.0) as u32;
-                println!("                <tr>");
-                println!("                    <td class=\"keyword\">{}</td>", keyword);
-                println!("                    <td class=\"count\">{}</td>", count);
-                println!("                    <td>");
-                println!("                        <div class=\"progress-bar\">");
-                println!("                            <div class=\"progress-fill\" style=\"width: {}%;\"></div>", percentage);
-                println!("                        </div>");
-                println!("                    </td>");
-                println!("                </tr>");
+                if let Err(e) = writeln!(
+                    file,
+                    r#"                <tr>
+                    <td class="keyword">{}</td>
+                    <td class="count">{}</td>
+                    <td>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {}%;"></div>
+                        </div>
+                    </td>
+                </tr>"#,
+                    keyword, count, percentage
+                ) {
+                    eprintln!("Error writing to file: {}", e);
+                    return;
+                }
             }
         }
 
-        println!("            </tbody>");
-        println!("        </table>");
+        if let Err(e) = writeln!(
+            file,
+            r#"            </tbody>
+        </table>"#
+        ) {
+            eprintln!("Error writing to file: {}", e);
+            return;
+        }
     } else {
-        println!("        <p style=\"text-align: center; color: #6c757d; font-style: italic;\">No keywords found in the analyzed files.</p>");
+        if let Err(e) = writeln!(
+            file,
+            r#"        <p style="text-align: center; color: #6c757d; font-style: italic;">No keywords found in the analyzed files.</p>"#
+        ) {
+            eprintln!("Error writing to file: {}", e);
+            return;
+        }
     }
 
-    println!("        <div class=\"footer\">");
-    println!("            <p>Generated by Multi-Language Keyword Analyzer</p>");
-    println!("        </div>");
-    println!("    </div>");
-    println!("</body>");
-    println!("</html>");
+    if let Err(e) = writeln!(
+        file,
+        r#"        <div class="footer">
+            <p>Generated by Multi-Language Keyword Analyzer</p>
+        </div>
+    </div>
+</body>
+</html>"#
+    ) {
+        eprintln!("Error writing to file: {}", e);
+        return;
+    }
+
+    println!("HTML results written to: {}", file_path);
 }
 
 #[cfg(test)]
@@ -416,14 +590,15 @@ mod tests {
     fn test_parse_args() {
         // Test default values
         let args = vec!["program".to_string()];
-        let (path, format, language) = parse_args(&args);
+        let (path, format, language, output_file) = parse_args(&args);
         assert_eq!(path, ".");
         assert!(matches!(format, OutputFormat::Plain));
         assert!(matches!(language, Language::Rust));
+        assert!(output_file.is_none());
 
         // Test path argument
         let args = vec!["program".to_string(), "src/".to_string()];
-        let (path, format, language) = parse_args(&args);
+        let (path, format, language, _output_file) = parse_args(&args);
         assert_eq!(path, "src/");
         assert!(matches!(format, OutputFormat::Plain));
         assert!(matches!(language, Language::Rust));
@@ -434,16 +609,20 @@ mod tests {
             "--format".to_string(),
             "json".to_string(),
         ];
-        let (path, format, _language) = parse_args(&args);
+        let (path, format, _language, _output_file) = parse_args(&args);
         assert_eq!(path, ".");
         assert!(matches!(format, OutputFormat::Json));
 
         let args = vec!["program".to_string(), "-f".to_string(), "csv".to_string()];
-        let (_path, format, _language) = parse_args(&args);
+        let (_path, format, _language, _output_file) = parse_args(&args);
         assert!(matches!(format, OutputFormat::Csv));
 
-        let args = vec!["program".to_string(), "--format".to_string(), "html".to_string()];
-        let (_path, format, _language) = parse_args(&args);
+        let args = vec![
+            "program".to_string(),
+            "--format".to_string(),
+            "html".to_string(),
+        ];
+        let (_path, format, _language, _output_file) = parse_args(&args);
         assert!(matches!(format, OutputFormat::Html));
 
         // Test language options
@@ -452,11 +631,11 @@ mod tests {
             "--language".to_string(),
             "js".to_string(),
         ];
-        let (_path, _format, language) = parse_args(&args);
+        let (_path, _format, language, _output_file) = parse_args(&args);
         assert!(matches!(language, Language::JavaScript));
 
         let args = vec!["program".to_string(), "-l".to_string(), "ts".to_string()];
-        let (_path, _format, language) = parse_args(&args);
+        let (_path, _format, language, _output_file) = parse_args(&args);
         assert!(matches!(language, Language::JavaScript));
 
         let args = vec![
@@ -464,11 +643,11 @@ mod tests {
             "--language".to_string(),
             "ruby".to_string(),
         ];
-        let (_path, _format, language) = parse_args(&args);
+        let (_path, _format, language, _output_file) = parse_args(&args);
         assert!(matches!(language, Language::Ruby));
 
         let args = vec!["program".to_string(), "-l".to_string(), "rb".to_string()];
-        let (_path, _format, language) = parse_args(&args);
+        let (_path, _format, language, _output_file) = parse_args(&args);
         assert!(matches!(language, Language::Ruby));
 
         let args = vec![
@@ -476,7 +655,7 @@ mod tests {
             "--language".to_string(),
             "go".to_string(),
         ];
-        let (_path, _format, language) = parse_args(&args);
+        let (_path, _format, language, _output_file) = parse_args(&args);
         assert!(matches!(language, Language::Golang));
 
         let args = vec![
@@ -484,7 +663,7 @@ mod tests {
             "-l".to_string(),
             "golang".to_string(),
         ];
-        let (_path, _format, language) = parse_args(&args);
+        let (_path, _format, language, _output_file) = parse_args(&args);
         assert!(matches!(language, Language::Golang));
 
         // Test combined arguments
@@ -496,7 +675,7 @@ mod tests {
             "--language".to_string(),
             "rust".to_string(),
         ];
-        let (path, format, language) = parse_args(&args);
+        let (path, format, language, _output_file) = parse_args(&args);
         assert_eq!(path, "target_dir");
         assert!(matches!(format, OutputFormat::Json));
         assert!(matches!(language, Language::Rust));
@@ -506,7 +685,7 @@ mod tests {
             "program".to_string(),
             "https://github.com/rust-lang/rust".to_string(),
         ];
-        let (path, format, language) = parse_args(&args);
+        let (path, format, language, _output_file) = parse_args(&args);
         assert_eq!(path, "https://github.com/rust-lang/rust");
         assert!(matches!(format, OutputFormat::Plain));
         assert!(matches!(language, Language::Rust));
@@ -528,7 +707,7 @@ mod tests {
 
         // Test default language in parse_args
         let args = vec!["program".to_string()];
-        let (_, _, language) = parse_args(&args);
+        let (_, _, language, _output_file) = parse_args(&args);
         assert!(matches!(language, Language::Rust));
     }
 
@@ -550,10 +729,11 @@ mod tests {
     fn test_parse_args_edge_cases() {
         // Test empty program name only
         let args = vec!["program".to_string()];
-        let (path, format, language) = parse_args(&args);
+        let (path, format, language, output_file) = parse_args(&args);
         assert_eq!(path, ".");
         assert!(matches!(format, OutputFormat::Plain));
         assert!(matches!(language, Language::Rust));
+        assert!(output_file.is_none());
 
         // Test invalid language defaults to Rust
         let args = vec![
@@ -561,7 +741,7 @@ mod tests {
             "--language".to_string(),
             "invalid".to_string(),
         ];
-        let (_, _, language) = parse_args(&args);
+        let (_, _, language, _output_file) = parse_args(&args);
         assert!(matches!(language, Language::Rust));
 
         // Test invalid format defaults to Plain
@@ -570,12 +750,12 @@ mod tests {
             "--format".to_string(),
             "invalid".to_string(),
         ];
-        let (_, format, _) = parse_args(&args);
+        let (_, format, _, _output_file) = parse_args(&args);
         assert!(matches!(format, OutputFormat::Plain));
 
         // Test flag without value (should be skipped)
         let args = vec!["program".to_string(), "--format".to_string()];
-        let (_, format, _) = parse_args(&args);
+        let (_, format, _, _output_file) = parse_args(&args);
         assert!(matches!(format, OutputFormat::Plain));
 
         // Test unknown flag (should be ignored, but value becomes path)
@@ -584,8 +764,42 @@ mod tests {
             "--unknown-flag".to_string(),
             "value".to_string(),
         ];
-        let (path, _, _) = parse_args(&args);
+        let (path, _, _, _output_file) = parse_args(&args);
         assert_eq!(path, "value"); // The value becomes the path since unknown flag is skipped
+
+        // Test output file option
+        let args = vec![
+            "program".to_string(),
+            "--output".to_string(),
+            "results.json".to_string(),
+        ];
+        let (_, _, _, output_file) = parse_args(&args);
+        assert_eq!(output_file, Some("results.json".to_string()));
+
+        let args = vec![
+            "program".to_string(),
+            "-o".to_string(),
+            "analysis.html".to_string(),
+        ];
+        let (_, _, _, output_file) = parse_args(&args);
+        assert_eq!(output_file, Some("analysis.html".to_string()));
+
+        // Test combined with other options
+        let args = vec![
+            "program".to_string(),
+            "--language".to_string(),
+            "rust".to_string(),
+            "--format".to_string(),
+            "json".to_string(),
+            "--output".to_string(),
+            "rust_analysis.json".to_string(),
+            "src/".to_string(),
+        ];
+        let (path, format, language, output_file) = parse_args(&args);
+        assert_eq!(path, "src/");
+        assert!(matches!(format, OutputFormat::Json));
+        assert!(matches!(language, Language::Rust));
+        assert_eq!(output_file, Some("rust_analysis.json".to_string()));
     }
 
     #[test]
@@ -656,22 +870,74 @@ mod tests {
         // but we can test that the functions don't panic with valid data
 
         // Test Plain format
-        print_results(&counts, 10, OutputFormat::Plain, Language::Rust);
+        print_results(&counts, 10, OutputFormat::Plain, Language::Rust, None);
 
-        // Test JSON format
-        print_results(&counts, 10, OutputFormat::Json, Language::JavaScript);
+        // Test JSON format - we can't easily test file output in unit tests,
+        // but we can test that the function doesn't panic with test file names
+        // Note: This will create temporary files during testing
+        print_results(
+            &counts,
+            10,
+            OutputFormat::Json,
+            Language::JavaScript,
+            Some("test_output.json".to_string()),
+        );
 
         // Test CSV format
-        print_results(&counts, 10, OutputFormat::Csv, Language::Ruby);
+        print_results(
+            &counts,
+            10,
+            OutputFormat::Csv,
+            Language::Ruby,
+            Some("test_output.csv".to_string()),
+        );
 
         // Test HTML format
-        print_results(&counts, 10, OutputFormat::Html, Language::Golang);
+        print_results(
+            &counts,
+            10,
+            OutputFormat::Html,
+            Language::Golang,
+            Some("test_output.html".to_string()),
+        );
 
         // Test with empty data
         let empty_counts = HashMap::new();
-        print_results(&empty_counts, 0, OutputFormat::Plain, Language::Golang);
-        print_results(&empty_counts, 0, OutputFormat::Json, Language::Rust);
-        print_results(&empty_counts, 0, OutputFormat::Csv, Language::JavaScript);
-        print_results(&empty_counts, 0, OutputFormat::Html, Language::Python);
+        print_results(
+            &empty_counts,
+            0,
+            OutputFormat::Plain,
+            Language::Golang,
+            None,
+        );
+        print_results(
+            &empty_counts,
+            0,
+            OutputFormat::Json,
+            Language::Rust,
+            Some("empty_test.json".to_string()),
+        );
+        print_results(
+            &empty_counts,
+            0,
+            OutputFormat::Csv,
+            Language::JavaScript,
+            Some("empty_test.csv".to_string()),
+        );
+        print_results(
+            &empty_counts,
+            0,
+            OutputFormat::Html,
+            Language::Python,
+            Some("empty_test.html".to_string()),
+        );
+
+        // Clean up test files (ignore errors if files don't exist)
+        let _ = fs::remove_file("test_output.json");
+        let _ = fs::remove_file("test_output.csv");
+        let _ = fs::remove_file("test_output.html");
+        let _ = fs::remove_file("empty_test.json");
+        let _ = fs::remove_file("empty_test.csv");
+        let _ = fs::remove_file("empty_test.html");
     }
 }

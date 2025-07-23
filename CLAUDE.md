@@ -94,11 +94,14 @@ cargo run -- --language rust --format csv
 # HTML format
 cargo run -- --language rust --format html
 
+# HTML format with custom output file
+cargo run -- --language rust --format html --output analysis.html
+
 # Ruby with different formats
-cargo run -- --language ruby --format json
+cargo run -- --language ruby --format json --output ruby_keywords.json
 
 # Go with different formats
-cargo run -- --language go --format csv
+cargo run -- --language go --format csv --output go_analysis.csv
 ```
 
 ## Command Options
@@ -117,11 +120,15 @@ cargo run -- -l go
 cargo run -- --format json
 cargo run -- -f csv
 
+# Output file specification
+cargo run -- --output results.json
+cargo run -- -o analysis.html
+
 # Combined options
-cargo run -- -l ts -f json src/
-cargo run -- -l rb -f csv lib/  
-cargo run -- -l go -f json cmd/
-cargo run -- -l rust -f html src/
+cargo run -- -l ts -f json -o typescript_analysis.json src/
+cargo run -- -l rb -f csv -o ruby_keywords.csv lib/
+cargo run -- -l go -f json -o go_analysis.json cmd/
+cargo run -- -l rust -f html -o rust_report.html src/
 ```
 
 ## Supported Languages
@@ -131,7 +138,7 @@ cargo run -- -l rust -f html src/
 - **Keywords Tracked**: 60+ keywords including primitives, control flow, and reserved words
 - **Skip Directories**: `target/`, `.git/`, `node_modules/`
 
-### TypeScript/JavaScript  
+### TypeScript/JavaScript
 - **File Extensions**: `.ts`, `.tsx`, `.js`, `.jsx`
 - **Keywords Tracked**: 88+ keywords including ES2023, TypeScript 5.x features
 - **Skip Directories**: `node_modules/`, `dist/`, `build/`, `.git/`, `target/`
@@ -148,10 +155,11 @@ cargo run -- -l rust -f html src/
 
 ## Features
 
-- **Multi-language support**: Rust, TypeScript/JavaScript, Ruby, and Go analysis
+- **Multi-language support**: Rust, TypeScript/JavaScript, Ruby, Go, and Python analysis
 - **Comprehensive keyword tracking**: Latest language specifications supported
 - **Recursive directory scanning** with intelligent directory skipping
 - **Multiple output formats** (Plain, JSON, CSV, HTML) for integration with other tools
+- **File output support**: Save results to custom files or use auto-generated timestamped filenames
 - **GitHub repository support** - directly analyze any public GitHub repository by URL
 - **Real-time progress display** - shows current file being processed and count
 - **Automatic cleanup** - temporary directories are cleaned up after analysis
@@ -179,12 +187,12 @@ cargo run -- --language go https://github.com/golang/go
 cargo run -- --language go https://github.com/kubernetes/kubernetes
 cargo run -- --language go https://github.com/docker/docker
 
-# With different output formats
-cargo run -- --language rust --format json https://github.com/actix/actrix-web
-cargo run -- --language js --format csv https://github.com/nestjs/nest
-cargo run -- --language ruby --format json https://github.com/fastlane/fastlane
-cargo run -- --language go --format json https://github.com/hashicorp/terraform
-cargo run -- --language rust --format html https://github.com/rust-lang/rust
+# With different output formats and files
+cargo run -- --language rust --format json --output actix_analysis.json https://github.com/actix/actix-web
+cargo run -- --language js --format csv --output nestjs_keywords.csv https://github.com/nestjs/nest
+cargo run -- --language ruby --format json --output fastlane_analysis.json https://github.com/fastlane/fastlane
+cargo run -- --language go --format json --output terraform_keywords.json https://github.com/hashicorp/terraform
+cargo run -- --language rust --format html --output rust_lang.html https://github.com/rust-lang/rust
 ```
 
 The tool automatically:
@@ -192,6 +200,45 @@ The tool automatically:
 - Analyzes all files matching the selected language (`.rs` for Rust, `.ts/.tsx/.js/.jsx` for TypeScript/JavaScript, `.rb/.rake/.gemspec` for Ruby, `.go` for Go)
 - Displays real-time progress showing files being processed
 - Cleans up the temporary directory after analysis
+
+## File Output
+
+When using JSON, CSV, or HTML formats, the tool automatically saves results to files:
+
+### Automatic File Naming
+If no output file is specified, the tool generates timestamped filenames:
+- Format: `keyword_analysis_{language}_{timestamp}.{extension}`
+- Examples: `keyword_analysis_rust_1753282196.json`, `keyword_analysis_python_1753282200.html`
+
+### Custom File Paths
+Use `--output` or `-o` to specify custom output paths:
+
+```bash
+# Save to specific files
+cargo run -- --format json --output my_analysis.json
+cargo run -- --format html --output report.html
+cargo run -- --format csv --output data.csv
+
+# With language and path specification
+cargo run -- --language python --format json --output python_keywords.json src/
+cargo run -- --language rust --format html --output rust_report.html https://github.com/tokio-rs/tokio
+```
+
+### Output Format Details
+
+**JSON Output:**
+- Structured data perfect for programmatic analysis
+- Includes file count, total keywords, and keyword counts
+
+**CSV Output:**
+- Spreadsheet-compatible format
+- Easy to import into Excel, Google Sheets, or data analysis tools
+
+**HTML Output:**
+- Visual, interactive report with charts and styling
+- Professional presentation format
+- Includes progress bars showing keyword distribution
+- Mobile-responsive design
 
 ## Example Outputs
 
