@@ -290,3 +290,165 @@ fn print_csv(sorted_counts: &[(&String, &usize)], file_count: usize) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_github_url() {
+        // GitHub URLs should be detected
+        assert!(is_github_url("https://github.com/rust-lang/rust"));
+        assert!(is_github_url("https://github.com/tokio-rs/tokio"));
+        assert!(is_github_url("http://github.com/user/repo"));
+
+        // Non-GitHub URLs should not be detected
+        assert!(!is_github_url("https://gitlab.com/user/repo"));
+        assert!(!is_github_url("https://bitbucket.org/user/repo"));
+        assert!(!is_github_url("./local/path"));
+        assert!(!is_github_url("/absolute/path"));
+        assert!(!is_github_url("relative/path"));
+        assert!(!is_github_url(""));
+
+        // Edge cases
+        assert!(!is_github_url("github.com/user/repo")); // Missing protocol
+        assert!(!is_github_url("https://github.com")); // No repo path
+    }
+
+    #[test]
+    fn test_count_keywords() {
+        // Test basic keyword counting
+        let content = "fn main() { let x = 42; if x > 0 { return; } }";
+        let counts = count_keywords(content);
+
+        assert_eq!(counts.get("fn"), Some(&1));
+        assert_eq!(counts.get("let"), Some(&1));
+        assert_eq!(counts.get("if"), Some(&1));
+        assert_eq!(counts.get("return"), Some(&1));
+
+        // Test multiple occurrences
+        let content = "let x = 1; let y = 2; let z = x + y;";
+        let counts = count_keywords(content);
+        assert_eq!(counts.get("let"), Some(&3));
+
+        // Test no keywords
+        let content = "hello world 123 test";
+        let counts = count_keywords(content);
+        assert!(counts.is_empty());
+
+        // Test keywords in different contexts
+        let content = "struct MyStruct { field: i32 } enum MyEnum { Variant }";
+        let counts = count_keywords(content);
+        assert_eq!(counts.get("struct"), Some(&1));
+        assert_eq!(counts.get("enum"), Some(&1));
+        assert_eq!(counts.get("i32"), Some(&1));
+    }
+
+    #[test]
+    fn test_should_skip_dir() {
+        use std::path::PathBuf;
+
+        // Directories that should be skipped
+        assert!(should_skip_dir(&PathBuf::from("target")));
+        assert!(should_skip_dir(&PathBuf::from(".git")));
+        assert!(should_skip_dir(&PathBuf::from("node_modules")));
+        assert!(should_skip_dir(&PathBuf::from("/path/to/target")));
+        assert!(should_skip_dir(&PathBuf::from("./project/.git")));
+
+        // Directories that should not be skipped
+        assert!(!should_skip_dir(&PathBuf::from("src")));
+        assert!(!should_skip_dir(&PathBuf::from("examples")));
+        assert!(!should_skip_dir(&PathBuf::from("tests")));
+        assert!(!should_skip_dir(&PathBuf::from("my_target_dir")));
+        assert!(!should_skip_dir(&PathBuf::from(".github")));
+    }
+
+    #[test]
+    fn test_parse_args() {
+        // Test default values
+        let args = vec!["program".to_string()];
+        let (path, format) = parse_args(&args);
+        assert_eq!(path, ".");
+        assert!(matches!(format, OutputFormat::Plain));
+
+        // Test path argument
+        let args = vec!["program".to_string(), "src/".to_string()];
+        let (path, format) = parse_args(&args);
+        assert_eq!(path, "src/");
+        assert!(matches!(format, OutputFormat::Plain));
+
+        // Test format options
+        let args = vec![
+            "program".to_string(),
+            "--format".to_string(),
+            "json".to_string(),
+        ];
+        let (path, format) = parse_args(&args);
+        assert_eq!(path, ".");
+        assert!(matches!(format, OutputFormat::Json));
+
+        let args = vec!["program".to_string(), "-f".to_string(), "csv".to_string()];
+        let (_path, format) = parse_args(&args);
+        assert!(matches!(format, OutputFormat::Csv));
+
+        // Test combined arguments
+        let args = vec![
+            "program".to_string(),
+            "target_dir".to_string(),
+            "--format".to_string(),
+            "json".to_string(),
+        ];
+        let (path, format) = parse_args(&args);
+        assert_eq!(path, "target_dir");
+        assert!(matches!(format, OutputFormat::Json));
+
+        // Test GitHub URL
+        let args = vec![
+            "program".to_string(),
+            "https://github.com/rust-lang/rust".to_string(),
+        ];
+        let (path, format) = parse_args(&args);
+        assert_eq!(path, "https://github.com/rust-lang/rust");
+        assert!(matches!(format, OutputFormat::Plain));
+    }
+
+    #[test]
+    fn test_keyword_edge_cases() {
+        // Test keywords with underscores
+        let content = "let my_var = 42; fn my_function() {}";
+        let counts = count_keywords(content);
+        assert_eq!(counts.get("let"), Some(&1));
+        assert_eq!(counts.get("fn"), Some(&1));
+        // my_var and my_function should not be counted as keywords
+        assert!(counts.get("my_var").is_none());
+        assert!(counts.get("my_function").is_none());
+
+        // Test keywords in comments (should still be counted due to simple tokenization)
+        let content = "// This is a fn comment with let and if";
+        let counts = count_keywords(content);
+        assert_eq!(counts.get("fn"), Some(&1));
+        assert_eq!(counts.get("let"), Some(&1));
+        assert_eq!(counts.get("if"), Some(&1));
+
+        // Test keywords in strings (should still be counted due to simple tokenization)
+        let content = r#"let message = "This contains fn keyword";"#;
+        let counts = count_keywords(content);
+        assert_eq!(counts.get("let"), Some(&1));
+        assert_eq!(counts.get("fn"), Some(&1));
+    }
+
+    #[test]
+    fn test_all_rust_keywords_recognized() {
+        // Test that all keywords in RUST_KEYWORDS are properly recognized
+        for keyword in RUST_KEYWORDS {
+            let content = format!("{} ", keyword);
+            let counts = count_keywords(&content);
+            assert_eq!(
+                counts.get(*keyword),
+                Some(&1),
+                "Keyword '{}' was not properly counted",
+                keyword
+            );
+        }
+    }
+}
