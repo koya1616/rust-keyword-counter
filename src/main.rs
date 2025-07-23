@@ -4,6 +4,7 @@ use std::fs;
 use std::process::Command;
 
 mod javascript;
+mod ruby;
 mod rust;
 
 fn main() {
@@ -34,6 +35,7 @@ fn main() {
         Language::JavaScript => {
             javascript::analyze_directory(&actual_path, &mut total_counts, &mut file_count)
         }
+        Language::Ruby => ruby::analyze_directory(&actual_path, &mut total_counts, &mut file_count),
     };
 
     match result {
@@ -64,6 +66,7 @@ enum OutputFormat {
 enum Language {
     Rust,
     JavaScript,
+    Ruby,
 }
 
 fn parse_args(args: &[String]) -> (&str, OutputFormat, Language) {
@@ -91,6 +94,7 @@ fn parse_args(args: &[String]) -> (&str, OutputFormat, Language) {
                     language = match args[i + 1].as_str() {
                         "js" | "ts" | "javascript" | "typescript" => Language::JavaScript,
                         "rust" | "rs" => Language::Rust,
+                        "ruby" | "rb" => Language::Ruby,
                         _ => Language::Rust,
                     };
                     i += 2;
@@ -123,13 +127,14 @@ fn print_help() {
     println!("    <PATH>    Directory, file, or Git URL (GitHub/GitLab) to analyze [default: .]");
     println!();
     println!("OPTIONS:");
-    println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, js, ts]");
+    println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, js, ts, ruby, rb]");
     println!("    -f, --format <FORMAT>    Output format [default: plain] [possible values: plain, json, csv]");
     println!("    -h, --help               Print help information");
     println!();
     println!("EXAMPLES:");
     println!("    app --language rust");
     println!("    app --language js src/");
+    println!("    app --language ruby lib/");
     println!("    app -l ts github.com/microsoft/typescript");
     println!("    app -l rs gitlab.com/gitlab-org/gitlab");
     println!("    app --format json --language rust https://github.com/rust-lang/rust");
@@ -320,6 +325,18 @@ mod tests {
         let (_path, _format, language) = parse_args(&args);
         assert!(matches!(language, Language::JavaScript));
 
+        let args = vec![
+            "program".to_string(),
+            "--language".to_string(),
+            "ruby".to_string(),
+        ];
+        let (_path, _format, language) = parse_args(&args);
+        assert!(matches!(language, Language::Ruby));
+
+        let args = vec!["program".to_string(), "-l".to_string(), "rb".to_string()];
+        let (_path, _format, language) = parse_args(&args);
+        assert!(matches!(language, Language::Ruby));
+
         // Test combined arguments
         let args = vec![
             "program".to_string(),
@@ -350,10 +367,12 @@ mod tests {
         // Test that Language enum values work correctly
         let rust_lang = Language::Rust;
         let js_lang = Language::JavaScript;
+        let ruby_lang = Language::Ruby;
 
         // Test that they are different
         assert!(matches!(rust_lang, Language::Rust));
         assert!(matches!(js_lang, Language::JavaScript));
+        assert!(matches!(ruby_lang, Language::Ruby));
 
         // Test default language in parse_args
         let args = vec!["program".to_string()];

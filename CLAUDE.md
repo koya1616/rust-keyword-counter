@@ -15,7 +15,7 @@ docker compose exec rust-dev bash
 
 ## Language Selection
 
-The analyzer supports multiple programming languages. Use the `--language` or `-l` option with `rust`/`rs` for Rust, or `js`/`ts` for JavaScript/TypeScript.
+The analyzer supports multiple programming languages. Use the `--language` or `-l` option with `rust`/`rs` for Rust, `js`/`ts` for JavaScript/TypeScript, or `ruby`/`rb` for Ruby.
 
 ```bash
 # Run in Docker container
@@ -29,6 +29,10 @@ cargo run -- -l rust
 # Analyze TypeScript/JavaScript code
 cargo run -- --language js
 cargo run -- -l ts
+
+# Analyze Ruby code
+cargo run -- --language ruby
+cargo run -- -l rb
 ```
 
 ## Basic Usage
@@ -40,14 +44,17 @@ cargo run
 # Analyze specific directory or file
 cargo run -- --language rust /path/to/rust/project
 cargo run -- --language js src/
+cargo run -- --language ruby lib/
 
 # Analyze single files
 cargo run -- --language rust src/main.rs
 cargo run -- --language js app.ts
+cargo run -- --language ruby app.rb
 
 # Analyze GitHub repositories
 cargo run -- --language rust https://github.com/rust-lang/rust
 cargo run -- --language js https://github.com/microsoft/typescript
+cargo run -- --language ruby https://github.com/rails/rails
 ```
 
 ## Using Built Binary
@@ -62,6 +69,7 @@ cargo build --release
 # With arguments
 ./target/release/app --language rust --format json
 ./target/release/app --language js /path/to/typescript/project
+./target/release/app --language ruby /path/to/ruby/project
 ./target/release/app --language rust https://github.com/rust-lang/rust
 ./target/release/app --help
 ## Output Formats
@@ -75,6 +83,9 @@ cargo run -- --language js --format json
 
 # CSV format
 cargo run -- --language rust --format csv
+
+# Ruby with different formats
+cargo run -- --language ruby --format json
 ```
 
 ## Command Options
@@ -86,6 +97,7 @@ cargo run -- --help
 # Language selection (long and short forms)
 cargo run -- --language rust
 cargo run -- -l js
+cargo run -- -l ruby
 
 # Format selection (long and short forms)
 cargo run -- --format json
@@ -93,6 +105,7 @@ cargo run -- -f csv
 
 # Combined options
 cargo run -- -l ts -f json src/
+cargo run -- -l rb -f csv lib/
 ```
 
 ## Supported Languages
@@ -107,9 +120,14 @@ cargo run -- -l ts -f json src/
 - **Keywords Tracked**: 88+ keywords including ES2023, TypeScript 5.x features
 - **Skip Directories**: `node_modules/`, `dist/`, `build/`, `.git/`, `target/`
 
+### Ruby
+- **File Extensions**: `.rb`, `.rake`, `.gemspec`, plus special files (`Rakefile`, `Gemfile`, `Guardfile`, `Capfile`, `Vagrantfile`)
+- **Keywords Tracked**: 75+ keywords including core Ruby keywords, metaprogramming, and common methods
+- **Skip Directories**: `vendor/`, `tmp/`, `log/`, `.bundle/`, `.git/`, `target/`, `node_modules/`
+
 ## Features
 
-- **Multi-language support**: Rust and TypeScript/JavaScript analysis
+- **Multi-language support**: Rust, TypeScript/JavaScript, and Ruby analysis
 - **Comprehensive keyword tracking**: Latest language specifications supported
 - **Recursive directory scanning** with intelligent directory skipping
 - **Multiple output formats** (Plain, JSON, CSV) for integration with other tools
@@ -130,14 +148,20 @@ cargo run -- --language js https://github.com/microsoft/typescript
 cargo run -- --language js https://github.com/angular/angular
 cargo run -- --language js https://github.com/vuejs/vue
 
+# Analyze popular Ruby projects
+cargo run -- --language ruby https://github.com/rails/rails
+cargo run -- --language ruby https://github.com/jekyll/jekyll
+cargo run -- --language ruby https://github.com/discourse/discourse
+
 # With different output formats
-cargo run -- --language rust --format json https://github.com/actix/actix-web
+cargo run -- --language rust --format json https://github.com/actix/actrix-web
 cargo run -- --language js --format csv https://github.com/nestjs/nest
+cargo run -- --language ruby --format json https://github.com/fastlane/fastlane
 ```
 
 The tool automatically:
 - Clones the repository to a temporary directory using `git clone --depth 1`
-- Analyzes all files matching the selected language (`.rs` for Rust, `.ts/.tsx/.js/.jsx` for TypeScript)
+- Analyzes all files matching the selected language (`.rs` for Rust, `.ts/.tsx/.js/.jsx` for TypeScript/JavaScript, `.rb/.rake/.gemspec` for Ruby)
 - Displays real-time progress showing files being processed
 - Cleans up the temporary directory after analysis
 
@@ -171,6 +195,21 @@ async        : 1
 ...
 ```
 
+### Ruby Analysis
+```
+=== Rust Keyword Analysis Results ===
+Files analyzed: 2
+Total keywords found: 67
+
+def          : 12
+end          : 12
+class        : 4
+if           : 6
+attr_accessor: 2
+module       : 1
+...
+```
+
 ## Testing
 
 Run the comprehensive test suite:
@@ -185,10 +224,11 @@ docker compose exec rust-dev cargo test -- --no-capture
 # Run specific test module
 docker compose exec rust-dev cargo test rust::tests
 docker compose exec rust-dev cargo test javascript::tests
+docker compose exec rust-dev cargo test ruby::tests
 ```
 
 The test suite includes:
-- **21 unit tests** covering all major functionality
-- **Language-specific tests** for both Rust and JavaScript modules
+- **30+ unit tests** covering all major functionality
+- **Language-specific tests** for Rust, JavaScript, and Ruby modules
 - **Edge case testing** for error handling and input validation
 - **Mock tests** for network-dependent functionality (avoiding authentication prompts)
