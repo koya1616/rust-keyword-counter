@@ -1,0 +1,11 @@
+[package]
+name = "keyword-analyzer-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "keyword-analyzer"
+path = "src/main.rs"
+
+[dependencies]
+keyword-analyzer-shared = { workspace = true }

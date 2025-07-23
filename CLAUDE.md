@@ -1,134 +1,223 @@
-# Docker Development Environment
+# Multi-Language Keyword Analyzer
+
+A comprehensive keyword analysis tool supporting 5 programming languages with both CLI and API Server interfaces.
+
+## Architecture
+
+This project uses Rust workspace architecture with three main components:
+
+```
+├── Cargo.toml (workspace root)
+├── shared-lib/ (共有ライブラリ - Core analysis engine)
+├── cli/ (CLI binary - Command-line interface)
+├── api-server/ (API Server binary - REST API)
+├── CLAUDE.md (this file)
+├── Dockerfile
+└── compose.yml
+```
+
+## Docker Development Environment
 
 Start development container:
 ```bash
-docker compose up -d
+docker compose up -d rust-dev
 docker compose exec rust-dev bash
+```
+
+Start API server:
+```bash
+docker compose up -d api-server
 ```
 
 # Development Guidelines
 
-- Use only Rust standard library - no external dependencies
-- Implement functionality using built-in Rust features only
+- Uses only Rust standard library for analysis logic - no external dependencies in shared-lib
+- API server uses tokio + axum for REST endpoints
+- All language analysis logic is shared between CLI and API
 
-# Multi-Language Keyword Analyzer Usage
+## CLI Usage
 
-## Language Selection
+The CLI provides the original keyword analysis functionality.
 
-The analyzer supports multiple programming languages. Use the `--language` or `-l` option with `rust`/`rs` for Rust, `js`/`ts` for JavaScript/TypeScript, `ruby`/`rb` for Ruby, or `go`/`golang` for Go.
+### Language Selection
+
+The analyzer supports multiple programming languages. Use the `--language` or `-l` option:
 
 ```bash
 # Run in Docker container
-docker compose up -d
+docker compose up -d rust-dev
 docker compose exec rust-dev bash
 
 # Analyze Rust code (default)
-cargo run -- --language rust
-cargo run -- -l rust
+cargo run --bin keyword-analyzer -- --language rust
+cargo run --bin keyword-analyzer -- -l rust
 
 # Analyze TypeScript/JavaScript code
-cargo run -- --language js
-cargo run -- -l ts
+cargo run --bin keyword-analyzer -- --language js
+cargo run --bin keyword-analyzer -- -l ts
 
 # Analyze Ruby code
-cargo run -- --language ruby
-cargo run -- -l rb
+cargo run --bin keyword-analyzer -- --language ruby
+cargo run --bin keyword-analyzer -- -l rb
 
 # Analyze Go code
-cargo run -- --language go
-cargo run -- -l golang
+cargo run --bin keyword-analyzer -- --language go
+cargo run --bin keyword-analyzer -- -l golang
+
+# Analyze Python code
+cargo run --bin keyword-analyzer -- --language python
+cargo run --bin keyword-analyzer -- -l py
 ```
 
-## Basic Usage
+### Basic Usage
 
 ```bash
 # Analyze current directory (Rust by default)
-cargo run
+cargo run --bin keyword-analyzer
 
 # Analyze specific directory or file
-cargo run -- --language rust /path/to/rust/project
-cargo run -- --language js src/
-cargo run -- --language ruby lib/
+cargo run --bin keyword-analyzer -- --language rust /path/to/rust/project
+cargo run --bin keyword-analyzer -- --language js src/
+cargo run --bin keyword-analyzer -- --language ruby lib/
 
 # Analyze single files
-cargo run -- --language rust src/main.rs
-cargo run -- --language js app.ts
-cargo run -- --language ruby app.rb
-cargo run -- --language go main.go
+cargo run --bin keyword-analyzer -- --language rust src/main.rs
+cargo run --bin keyword-analyzer -- --language js app.ts
+cargo run --bin keyword-analyzer -- --language ruby app.rb
+cargo run --bin keyword-analyzer -- --language go main.go
 
 # Analyze GitHub repositories
-cargo run -- --language rust https://github.com/rust-lang/rust
-cargo run -- --language js https://github.com/microsoft/typescript
-cargo run -- --language ruby https://github.com/rails/rails
-cargo run -- --language go https://github.com/golang/go
+cargo run --bin keyword-analyzer -- --language rust https://github.com/rust-lang/rust
+cargo run --bin keyword-analyzer -- --language js https://github.com/microsoft/typescript
+cargo run --bin keyword-analyzer -- --language ruby https://github.com/rails/rails
+cargo run --bin keyword-analyzer -- --language go https://github.com/golang/go
 ```
 
-## Using Built Binary
-
-```bash
-# Build release version
-cargo build --release
-
-# Run built binary directly
-./target/release/app
-
-# With arguments
-./target/release/app --language rust --format json
-./target/release/app --language js /path/to/typescript/project
-./target/release/app --language ruby /path/to/ruby/project
-./target/release/app --language go /path/to/go/project
-./target/release/app --language rust https://github.com/rust-lang/rust
-./target/release/app --help
-## Output Formats
+### Output Formats
 
 ```bash
 # Plain text output (default)
-cargo run -- --language rust
+cargo run --bin keyword-analyzer -- --language rust
 
 # JSON format
-cargo run -- --language js --format json
+cargo run --bin keyword-analyzer -- --language js --format json
 
 # CSV format
-cargo run -- --language rust --format csv
+cargo run --bin keyword-analyzer -- --language rust --format csv
 
 # HTML format
-cargo run -- --language rust --format html
+cargo run --bin keyword-analyzer -- --language rust --format html
 
-# HTML format with custom output file
-cargo run -- --language rust --format html --output analysis.html
+# SVG Graph format
+cargo run --bin keyword-analyzer -- --language rust --format graph
 
-# Ruby with different formats
-cargo run -- --language ruby --format json --output ruby_keywords.json
-
-# Go with different formats
-cargo run -- --language go --format csv --output go_analysis.csv
+# Custom output file
+cargo run --bin keyword-analyzer -- --language rust --format html --output analysis.html
 ```
 
-## Command Options
+### Command Options
 
 ```bash
 # Show help
-cargo run -- --help
+cargo run --bin keyword-analyzer -- --help
 
 # Language selection (long and short forms)
-cargo run -- --language rust
-cargo run -- -l js
-cargo run -- -l ruby
-cargo run -- -l go
+cargo run --bin keyword-analyzer -- --language rust
+cargo run --bin keyword-analyzer -- -l js
 
 # Format selection (long and short forms)
-cargo run -- --format json
-cargo run -- -f csv
+cargo run --bin keyword-analyzer -- --format json
+cargo run --bin keyword-analyzer -- -f csv
 
 # Output file specification
-cargo run -- --output results.json
-cargo run -- -o analysis.html
+cargo run --bin keyword-analyzer -- --output results.json
+cargo run --bin keyword-analyzer -- -o analysis.html
 
 # Combined options
-cargo run -- -l ts -f json -o typescript_analysis.json src/
-cargo run -- -l rb -f csv -o ruby_keywords.csv lib/
-cargo run -- -l go -f json -o go_analysis.json cmd/
-cargo run -- -l rust -f html -o rust_report.html src/
+cargo run --bin keyword-analyzer -- -l ts -f json -o typescript_analysis.json src/
+cargo run --bin keyword-analyzer -- -l rb -f csv -o ruby_keywords.csv lib/
+cargo run --bin keyword-analyzer -- -l go -f json -o go_analysis.json cmd/
+cargo run --bin keyword-analyzer -- -l rust -f html -o rust_report.html src/
+cargo run --bin keyword-analyzer -- -l rust -f graph -o rust_chart.svg src/
+```
+
+## API Server Usage
+
+The API server provides REST endpoints for keyword analysis.
+
+### Starting the Server
+
+```bash
+# Start API server (runs on port 3000)
+docker compose up -d api-server
+
+# Check logs
+docker compose logs -f api-server
+```
+
+### API Endpoints
+
+#### Health Check
+```bash
+curl http://localhost:3000/health
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": "Keyword Analyzer API Server is running",
+  "error": null
+}
+```
+
+#### Supported Languages
+```bash
+curl http://localhost:3000/languages
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": ["rust", "javascript", "ruby", "go", "python"],
+  "error": null
+}
+```
+
+#### Analyze Code (POST)
+```bash
+curl -X POST http://localhost:3000/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "language": "rust",
+    "path": "shared-lib/src/"
+  }'
+```
+
+#### Analyze Code (GET)
+```bash
+curl "http://localhost:3000/analyze/rust/shared-lib/src/"
+```
+
+Response Format:
+```json
+{
+  "success": true,
+  "data": {
+    "language": "rust",
+    "file_count": 6,
+    "total_keywords": 1331,
+    "keyword_counts": {
+      "let": 263,
+      "fn": 110,
+      "if": 103,
+      "..."
+    },
+    "files_analyzed": ["shared-lib/src/lib.rs", "..."]
+  },
+  "error": null
+}
 ```
 
 ## Supported Languages
@@ -153,75 +242,59 @@ cargo run -- -l rust -f html -o rust_report.html src/
 - **Keywords Tracked**: 64+ keywords including language keywords, built-in types, constants, and functions
 - **Skip Directories**: `vendor/`, `bin/`, `pkg/`, `.git/`, `target/`, `node_modules/`, `.vscode/`, `.idea/`
 
+### Python
+- **File Extensions**: `.py`, `.pyw`, plus special files (`__init__.py`, `setup.py`, `conftest.py`)
+- **Keywords Tracked**: 75+ keywords including built-in functions, exceptions, and Python 3.x features
+- **Skip Directories**: `__pycache__/`, `.venv/`, `venv/`, `env/`, `.git/`, `target/`, `node_modules/`
+
 ## Features
 
 - **Multi-language support**: Rust, TypeScript/JavaScript, Ruby, Go, and Python analysis
 - **Comprehensive keyword tracking**: Latest language specifications supported
 - **Recursive directory scanning** with intelligent directory skipping
-- **Multiple output formats** (Plain, JSON, CSV, HTML) for integration with other tools
+- **Multiple output formats** (Plain, JSON, CSV, HTML, SVG Graph) for integration with other tools
 - **File output support**: Save results to custom files or use auto-generated timestamped filenames
 - **GitHub repository support** - directly analyze any public GitHub repository by URL
 - **Real-time progress display** - shows current file being processed and count
 - **Automatic cleanup** - temporary directories are cleaned up after analysis
+- **REST API** - HTTP endpoints for integration with web applications
+- **Docker support** - containerized development and deployment
 
 ## GitHub Repository Analysis
 
+Both CLI and API support direct GitHub URL analysis:
+
 ```bash
-# Analyze popular Rust projects
-cargo run -- --language rust https://github.com/rust-lang/rust
-cargo run -- --language rust https://github.com/tokio-rs/tokio
-cargo run -- --language rust https://github.com/serde-rs/serde
+# CLI
+cargo run --bin keyword-analyzer -- --language rust https://github.com/rust-lang/rust
+cargo run --bin keyword-analyzer -- --language js https://github.com/microsoft/typescript
 
-# Analyze popular TypeScript projects
-cargo run -- --language js https://github.com/microsoft/typescript
-cargo run -- --language js https://github.com/angular/angular
-cargo run -- --language js https://github.com/vuejs/vue
-
-# Analyze popular Ruby projects
-cargo run -- --language ruby https://github.com/rails/rails
-cargo run -- --language ruby https://github.com/jekyll/jekyll
-cargo run -- --language ruby https://github.com/discourse/discourse
-
-# Analyze popular Go projects
-cargo run -- --language go https://github.com/golang/go
-cargo run -- --language go https://github.com/kubernetes/kubernetes
-cargo run -- --language go https://github.com/docker/docker
-
-# With different output formats and files
-cargo run -- --language rust --format json --output actix_analysis.json https://github.com/actix/actix-web
-cargo run -- --language js --format csv --output nestjs_keywords.csv https://github.com/nestjs/nest
-cargo run -- --language ruby --format json --output fastlane_analysis.json https://github.com/fastlane/fastlane
-cargo run -- --language go --format json --output terraform_keywords.json https://github.com/hashicorp/terraform
-cargo run -- --language rust --format html --output rust_lang.html https://github.com/rust-lang/rust
+# API
+curl -X POST http://localhost:3000/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "language": "rust", 
+    "path": "https://github.com/rust-lang/rust"
+  }'
 ```
-
-The tool automatically:
-- Clones the repository to a temporary directory using `git clone --depth 1`
-- Analyzes all files matching the selected language (`.rs` for Rust, `.ts/.tsx/.js/.jsx` for TypeScript/JavaScript, `.rb/.rake/.gemspec` for Ruby, `.go` for Go)
-- Displays real-time progress showing files being processed
-- Cleans up the temporary directory after analysis
 
 ## File Output
 
-When using JSON, CSV, or HTML formats, the tool automatically saves results to files:
+When using JSON, CSV, HTML, or Graph formats, the tool automatically saves results to files:
 
 ### Automatic File Naming
 If no output file is specified, the tool generates timestamped filenames:
 - Format: `keyword_analysis_{language}_{timestamp}.{extension}`
-- Examples: `keyword_analysis_rust_1753282196.json`, `keyword_analysis_python_1753282200.html`
+- Examples: `keyword_analysis_rust_1753282196.json`, `keyword_analysis_python_1753282200.svg`
 
 ### Custom File Paths
 Use `--output` or `-o` to specify custom output paths:
 
 ```bash
-# Save to specific files
-cargo run -- --format json --output my_analysis.json
-cargo run -- --format html --output report.html
-cargo run -- --format csv --output data.csv
+# CLI
+cargo run --bin keyword-analyzer -- --format json --output my_analysis.json
 
-# With language and path specification
-cargo run -- --language python --format json --output python_keywords.json src/
-cargo run -- --language rust --format html --output rust_report.html https://github.com/tokio-rs/tokio
+# API returns analysis data as JSON (no file output)
 ```
 
 ### Output Format Details
@@ -240,67 +313,11 @@ cargo run -- --language rust --format html --output rust_report.html https://git
 - Includes progress bars showing keyword distribution
 - Mobile-responsive design
 
-## Example Outputs
-
-### Rust Analysis
-```
-=== Rust Keyword Analysis Results ===
-Files analyzed: 3
-Total keywords found: 425
-
-let          : 97
-fn           : 39
-if           : 34
-mut          : 21
-use          : 17
-...
-```
-
-### TypeScript Analysis
-```
-=== Rust Keyword Analysis Results ===
-Files analyzed: 1
-Total keywords found: 21
-
-this         : 3
-string       : 3
-interface    : 1
-class        : 1
-async        : 1
-...
-```
-
-### Ruby Analysis
-```
-=== Rust Keyword Analysis Results ===
-Files analyzed: 2
-Total keywords found: 67
-
-def          : 12
-end          : 12
-class        : 4
-if           : 6
-attr_accessor: 2
-module       : 1
-...
-```
-
-### Go Analysis
-```
-=== Rust Keyword Analysis Results ===
-Files analyzed: 3
-Total keywords found: 89
-
-func         : 15
-var          : 12
-if           : 8
-for          : 6
-return       : 5
-package      : 3
-import       : 2
-struct       : 2
-...
-```
+**SVG Graph Output:**
+- Interactive bar chart visualization
+- Top 20 keywords with color coding
+- Hover effects and tooltips
+- Scalable vector graphics
 
 ## Testing
 
@@ -313,15 +330,50 @@ docker compose exec rust-dev cargo test
 # Run tests with output
 docker compose exec rust-dev cargo test -- --no-capture
 
-# Run specific test module
-docker compose exec rust-dev cargo test rust::tests
-docker compose exec rust-dev cargo test javascript::tests
-docker compose exec rust-dev cargo test ruby::tests
-docker compose exec rust-dev cargo test golang::tests
+# Run specific workspace tests
+docker compose exec rust-dev cargo test -p keyword-analyzer-shared
+docker compose exec rust-dev cargo test -p keyword-analyzer-cli
+docker compose exec rust-dev cargo test -p keyword-analyzer-api
 ```
 
 The test suite includes:
 - **40+ unit tests** covering all major functionality
-- **Language-specific tests** for Rust, JavaScript, Ruby, and Go modules
+- **Language-specific tests** for all supported languages
 - **Edge case testing** for error handling and input validation
-- **Mock tests** for network-dependent functionality (avoiding authentication prompts)
+- **Shared library tests** for core analysis engine
+
+## Building
+
+```bash
+# Build all workspace members
+docker compose exec rust-dev cargo build
+
+# Build specific binary
+docker compose exec rust-dev cargo build --bin keyword-analyzer
+docker compose exec rust-dev cargo build --bin api-server
+
+# Build release version
+docker compose exec rust-dev cargo build --release
+```
+
+## Development
+
+### Project Structure
+- `shared-lib/`: Core analysis engine (language-agnostic)
+- `cli/`: Command-line interface using shared library
+- `api-server/`: REST API server using shared library
+
+### Adding New Languages
+1. Create new module in `shared-lib/src/`
+2. Add language enum variant in `shared-lib/src/lib.rs`
+3. Implement analysis functions following existing patterns
+4. Add to CLI argument parser in `cli/src/main.rs`
+5. Add to API language parser in `api-server/src/main.rs`
+6. Add comprehensive tests
+
+### Contributing Guidelines
+- Follow existing code patterns
+- Add tests for new functionality
+- Update documentation
+- Use `cargo fmt` for formatting
+- Run `cargo clippy` for linting

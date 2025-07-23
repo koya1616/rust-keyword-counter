@@ -10,5 +10,18 @@ services:
     tty: true
     command: /bin/bash
 
+  api-server:
+    build: .
+    container_name: keyword-analyzer-api
+    volumes:
+      - .:/usr/src/app
+      - cargo-cache:/usr/local/cargo/registry
+    working_dir: /usr/src/app
+    ports:
+      - "3000:3000"
+    command: ["cargo", "run", "--bin", "api-server"]
+    stdin_open: true
+    tty: true
+
 volumes:
   cargo-cache:
