@@ -341,6 +341,28 @@ The test suite includes:
 - **Language-specific tests** for all supported languages
 - **Edge case testing** for error handling and input validation
 - **Shared library tests** for core analysis engine
+- **API integration tests** for all endpoints and validation logic
+
+### API Server Tests
+
+The API server includes comprehensive integration tests using `axum-test`:
+
+```bash
+# Run API server tests specifically
+docker compose exec rust-dev cargo test -p keyword-analyzer-api
+```
+
+**Test Coverage:**
+- ✅ Health check endpoint
+- ✅ Repository analysis with valid local paths  
+- ✅ Invalid language validation
+- ✅ Invalid format validation
+- ✅ Non-Git URL rejection
+- ✅ Invalid GitHub URL format validation
+- ✅ Invalid GitLab URL format validation
+- ✅ Default JSON format behavior
+- ✅ HTML format response validation
+- ✅ Language parsing validation
 
 ## Building
 

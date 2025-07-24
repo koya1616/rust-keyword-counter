@@ -171,6 +171,40 @@ pub fn is_git_url(input: &str) -> bool {
     || input.starts_with("gitlab.com/")
 }
 
+pub fn is_valid_github_repo_url(url: &str) -> bool {
+  // Check if it's a valid GitHub URL format
+  if let Some(path) = url.strip_prefix("https://github.com/") {
+    // Should have format: username/repository
+    let parts: Vec<&str> = path.split('/').collect();
+    parts.len() >= 2 && !parts[0].is_empty() && !parts[1].is_empty()
+  } else if let Some(path) = url.strip_prefix("http://github.com/") {
+    let parts: Vec<&str> = path.split('/').collect();
+    parts.len() >= 2 && !parts[0].is_empty() && !parts[1].is_empty()
+  } else if let Some(path) = url.strip_prefix("github.com/") {
+    let parts: Vec<&str> = path.split('/').collect();
+    parts.len() >= 2 && !parts[0].is_empty() && !parts[1].is_empty()
+  } else {
+    false
+  }
+}
+
+pub fn is_valid_gitlab_repo_url(url: &str) -> bool {
+  // Check if it's a valid GitLab URL format
+  if let Some(path) = url.strip_prefix("https://gitlab.com/") {
+    // Should have format: username/repository or group/subgroup/repository
+    let parts: Vec<&str> = path.split('/').collect();
+    parts.len() >= 2 && !parts[0].is_empty() && !parts[1].is_empty()
+  } else if let Some(path) = url.strip_prefix("http://gitlab.com/") {
+    let parts: Vec<&str> = path.split('/').collect();
+    parts.len() >= 2 && !parts[0].is_empty() && !parts[1].is_empty()
+  } else if let Some(path) = url.strip_prefix("gitlab.com/") {
+    let parts: Vec<&str> = path.split('/').collect();
+    parts.len() >= 2 && !parts[0].is_empty() && !parts[1].is_empty()
+  } else {
+    false
+  }
+}
+
 pub fn clone_git_repo(url: &str) -> Result<String, Box<dyn std::error::Error>> {
   let temp_dir = format!("/tmp/rust_analyzer_{}", std::process::id());
 
@@ -636,4 +670,155 @@ fn generate_y_axis_labels(x: usize, y_start: usize, height: usize, max_value: us
   }
 
   labels
+}
+
+pub fn generate_json_content(sorted_counts: &[(&String, &usize)], file_count: usize) -> String {
+  let total_keywords = sorted_counts
+    .iter()
+    .map(|(_, count)| **count)
+    .sum::<usize>();
+
+  let mut json = String::new();
+  json.push_str("{\n");
+  json.push_str(&format!("  \"files_analyzed\": {},\n", file_count));
+  json.push_str(&format!("  \"total_keywords\": {},\n", total_keywords));
+  json.push_str("  \"keywords\": {\n");
+
+  let mut first = true;
+  for (keyword, count) in sorted_counts {
+    if **count > 0 {
+      if !first {
+        json.push_str(",\n");
+      }
+      json.push_str(&format!("    \"{}\": {}", keyword, count));
+      first = false;
+    }
+  }
+
+  if !first {
+    json.push('\n');
+  }
+  json.push_str("  }\n");
+  json.push_str("}");
+
+  json
+}
+
+pub fn generate_html_content(
+  sorted_counts: &[(&String, &usize)],
+  file_count: usize,
+  language: Language,
+) -> String {
+  let language_name = match language {
+    Language::Rust => "Rust",
+    Language::JavaScript => "JavaScript/TypeScript",
+    Language::Ruby => "Ruby",
+    Language::Golang => "Go",
+    Language::Python => "Python",
+  };
+
+  let total_keywords: usize = sorted_counts.iter().map(|(_, count)| **count).sum();
+
+  let mut html = format!(
+    r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{} Keyword Analysis Results</title>
+    <style>
+        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background-color: #f5f5f5; }}
+        .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        h1 {{ color: #333; text-align: center; margin-bottom: 30px; border-bottom: 3px solid #007acc; padding-bottom: 10px; }}
+        .summary {{ background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; border-left: 4px solid #007acc; }}
+        .summary h2 {{ margin-top: 0; color: #495057; }}
+        .stat {{ display: inline-block; margin-right: 30px; }}
+        .stat-value {{ font-size: 24px; font-weight: bold; color: #007acc; }}
+        .stat-label {{ font-size: 14px; color: #6c757d; }}
+        .keywords-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+        .keywords-table th {{ background: #007acc; color: white; padding: 12px; text-align: left; font-weight: 600; }}
+        .keywords-table td {{ padding: 10px 12px; border-bottom: 1px solid #dee2e6; }}
+        .keywords-table tr:nth-child(even) {{ background-color: #f8f9fa; }}
+        .keywords-table tr:hover {{ background-color: #e3f2fd; }}
+        .keyword {{ font-family: 'Consolas', 'Monaco', monospace; font-weight: 600; color: #495057; }}
+        .count {{ font-weight: bold; color: #007acc; }}
+        .progress-bar {{ width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden; }}
+        .progress-fill {{ height: 100%; background: linear-gradient(90deg, #007acc, #40a9ff); transition: width 0.3s ease; }}
+        .footer {{ text-align: center; margin-top: 30px; color: #6c757d; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>{} Keyword Analysis Results</h1>
+        <div class="summary">
+            <h2>Analysis Summary</h2>
+            <div class="stat">
+                <div class="stat-value">{}</div>
+                <div class="stat-label">Files Analyzed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">{}</div>
+                <div class="stat-label">Total Keywords Found</div>
+            </div>
+        </div>"#,
+    language_name, language_name, file_count, total_keywords
+  );
+
+  if !sorted_counts.is_empty() && total_keywords > 0 {
+    let max_count = sorted_counts
+      .iter()
+      .map(|(_, count)| **count)
+      .max()
+      .unwrap_or(1);
+
+    html.push_str(
+      r#"        <table class="keywords-table">
+            <thead>
+                <tr>
+                    <th>Keyword</th>
+                    <th>Count</th>
+                    <th>Distribution</th>
+                </tr>
+            </thead>
+            <tbody>"#,
+    );
+
+    for (keyword, count) in sorted_counts {
+      if **count > 0 {
+        let percentage = ((**count as f64) / (max_count as f64) * 100.0) as u32;
+        html.push_str(&format!(
+          r#"                <tr>
+                    <td class="keyword">{}</td>
+                    <td class="count">{}</td>
+                    <td>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {}%;"></div>
+                        </div>
+                    </td>
+                </tr>"#,
+          keyword, count, percentage
+        ));
+      }
+    }
+
+    html.push_str(
+      r#"            </tbody>
+        </table>"#,
+    );
+  } else {
+    html.push_str(
+      r#"        <p style="text-align: center; color: #6c757d; font-style: italic;">No keywords found in the analyzed files.</p>"#,
+    );
+  }
+
+  html.push_str(
+    r#"        <div class="footer">
+            <p>Generated by Multi-Language Keyword Analyzer</p>
+        </div>
+    </div>
+</body>
+</html>"#,
+  );
+
+  html
 }
