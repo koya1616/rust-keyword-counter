@@ -15,5 +15,5 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-axum-test = "17.3"
-tokio-test = "0.4"
+axum-test = "18.0.0-rc3"
+tokio-test = "0.4.4"
