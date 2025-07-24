@@ -163,15 +163,79 @@ pub fn analyze_file(
 
 pub fn count_keywords(content: &str) -> HashMap<String, usize> {
   let mut counts = HashMap::new();
+  let mut chars = content.chars().peekable();
+  let mut current_token = String::new();
+  let mut in_string = false;
+  let mut in_comment = false;
+  let mut string_char = '\0';
 
-  // Simple tokenization - split on non-alphanumeric characters, but preserve ? and _
-  for word in content.split(|c: char| !c.is_alphanumeric() && c != '_' && c != '?') {
-    if RUBY_KEYWORDS.contains(&word) {
-      *counts.entry(word.to_string()).or_insert(0) += 1;
+  while let Some(c) = chars.next() {
+    match c {
+      // Handle single-line comments (Ruby uses #)
+      '#' if !in_string => {
+        in_comment = true;
+        if !current_token.is_empty() {
+          check_and_count_token(&current_token, &mut counts);
+          current_token.clear();
+        }
+        continue;
+      }
+      // End single-line comment
+      '\n' if in_comment => {
+        in_comment = false;
+        continue;
+      }
+      // Handle strings (double quotes and single quotes)
+      '"' | '\'' if !in_comment => {
+        if !in_string {
+          in_string = true;
+          string_char = c;
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+        } else if c == string_char {
+          in_string = false;
+          string_char = '\0';
+        }
+        continue;
+      }
+      // Handle escape sequences in strings
+      '\\' if in_string => {
+        // Skip the next character if we're in a string (escape sequence)
+        chars.next();
+        continue;
+      }
+      // Skip content inside strings and comments
+      _ if in_string || in_comment => {
+        continue;
+      }
+      // Handle regular tokens (Ruby allows ? in method names)
+      _ => {
+        if c.is_alphanumeric() || c == '_' || c == '?' {
+          current_token.push(c);
+        } else {
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+        }
+      }
     }
   }
 
+  // Check final token
+  if !current_token.is_empty() {
+    check_and_count_token(&current_token, &mut counts);
+  }
+
   counts
+}
+
+fn check_and_count_token(token: &str, counts: &mut HashMap<String, usize>) {
+  if RUBY_KEYWORDS.contains(&token) {
+    *counts.entry(token.to_string()).or_insert(0) += 1;
+  }
 }
 
 #[cfg(test)]
@@ -358,9 +422,9 @@ mod tests {
     // Special Variables and Constants
     let special_variables = r#"
             def file_info
-                puts "Current file: #{__FILE__}"
-                puts "Current line: #{__LINE__}"
-                puts "Encoding: #{__ENCODING__}"
+                current_file = __FILE__
+                current_line = __LINE__
+                encoding = __ENCODING__
             end
         "#;
 
@@ -583,12 +647,12 @@ mod tests {
 
   #[test]
   fn test_keyword_edge_cases() {
-    // Test keywords in comments and strings (should still be counted due to simple tokenization)
+    // Test keywords in comments and strings (should NOT be counted with new implementation)
     let content = "# This def method returns true\nputs \"The class keyword\"";
     let counts = count_keywords(content);
-    assert_eq!(counts.get("def"), Some(&1));
-    assert_eq!(counts.get("true"), Some(&1));
-    assert_eq!(counts.get("class"), Some(&1));
+    assert_eq!(counts.get("def"), None); // Not counted in comment
+    assert_eq!(counts.get("true"), None); // Not counted in comment
+    assert_eq!(counts.get("class"), None); // Not counted in string
 
     // Test keywords with underscores and special characters
     let content = "def my_method\n  return false unless defined?(something)\nend";
@@ -599,6 +663,62 @@ mod tests {
     assert_eq!(counts.get("unless"), Some(&1));
     assert_eq!(counts.get("defined?"), Some(&1));
     assert_eq!(counts.get("end"), Some(&1));
+  }
+
+  #[test]
+  fn test_string_and_comment_exclusion() {
+    // Test single-line comments
+    let content = "def test_method\n  # This def should not be counted\nend";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("def"), Some(&1)); // Only the actual def
+    assert_eq!(counts.get("end"), Some(&1)); // Only the actual end
+
+    // Test various string types
+    let content = r#"
+      def method_with_strings
+        single_quote = 'This has def and class in it'
+        double_quote = "This contains return and if keywords"
+        return true
+      end
+    "#;
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("def"), Some(&1)); // One def declaration
+    assert_eq!(counts.get("return"), Some(&1)); // One return statement
+    assert_eq!(counts.get("true"), Some(&1)); // One true literal
+    assert_eq!(counts.get("end"), Some(&1)); // One end statement
+    // These should NOT be counted as they're in strings
+    assert_eq!(counts.get("class"), None); // Only in string
+    assert_eq!(counts.get("if"), None); // Only in string
+
+    // Test escape sequences in strings
+    let content = r#"message = "Quote: \"def test; end\""; def actual_method; end"#;
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("def"), Some(&1)); // Only the actual def declaration
+    assert_eq!(counts.get("end"), Some(&1)); // Only the actual end statement
+  }
+
+  #[test]
+  fn test_partial_word_matches() {
+    // Test that keywords within identifiers are NOT counted
+    let content = "def define_method; return return_value; end";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("def"), Some(&1)); // Only the actual def keyword
+    assert_eq!(counts.get("return"), Some(&1)); // Only the actual return keyword
+    assert_eq!(counts.get("end"), Some(&1)); // Only the actual end keyword
+    
+    // These should NOT be counted as they are part of identifiers
+    assert_eq!(counts.get("define_method"), None);
+    assert_eq!(counts.get("return_value"), None);
+    
+    // Test with question mark methods
+    let content = "def test?; if respond_to?(:method); return true; end; end";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("def"), Some(&1));
+    assert_eq!(counts.get("if"), Some(&1));
+    assert_eq!(counts.get("respond_to?"), Some(&1)); // Question mark method
+    assert_eq!(counts.get("return"), Some(&1));
+    assert_eq!(counts.get("true"), Some(&1));
+    assert_eq!(counts.get("end"), Some(&2)); // Two end statements
   }
 
   #[test]
