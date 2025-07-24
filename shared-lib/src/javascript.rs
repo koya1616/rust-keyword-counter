@@ -151,15 +151,93 @@ pub fn analyze_file(
 
 pub fn count_keywords(content: &str) -> HashMap<String, usize> {
   let mut counts = HashMap::new();
+  let mut chars = content.chars().peekable();
+  let mut current_token = String::new();
+  let mut in_string = false;
+  let mut in_single_comment = false;
+  let mut in_multi_comment = false;
+  let mut string_char = '\0';
 
-  // Simple tokenization - split on non-alphanumeric characters
-  for word in content.split(|c: char| !c.is_alphanumeric() && c != '_' && c != '$') {
-    if JAVASCRIPT_KEYWORDS.contains(&word) {
-      *counts.entry(word.to_string()).or_insert(0) += 1;
+  while let Some(c) = chars.next() {
+    match c {
+      // Handle single-line comments
+      '/' if !in_string && !in_multi_comment => {
+        if chars.peek() == Some(&'/') {
+          chars.next(); // consume second '/'
+          in_single_comment = true;
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+          continue;
+        } else if chars.peek() == Some(&'*') {
+          chars.next(); // consume '*'
+          in_multi_comment = true;
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+          continue;
+        }
+      }
+      // End multi-line comment
+      '*' if in_multi_comment => {
+        if chars.peek() == Some(&'/') {
+          chars.next(); // consume '/'
+          in_multi_comment = false;
+          continue;
+        }
+      }
+      // End single-line comment
+      '\n' if in_single_comment => {
+        in_single_comment = false;
+        continue;
+      }
+      // Handle strings
+      '"' | '\'' | '`' if !in_single_comment && !in_multi_comment => {
+        if !in_string {
+          in_string = true;
+          string_char = c;
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+        } else if c == string_char {
+          in_string = false;
+          string_char = '\0';
+        }
+        continue;
+      }
+      // Skip content inside strings and comments
+      _ if in_string || in_single_comment || in_multi_comment => {
+        continue;
+      }
+      // Handle regular tokens
+      _ => {
+        if c.is_alphanumeric() || c == '_' || c == '$' {
+          current_token.push(c);
+        } else {
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+        }
+      }
     }
   }
 
+  // Check final token
+  if !current_token.is_empty() {
+    check_and_count_token(&current_token, &mut counts);
+  }
+
   counts
+}
+
+fn check_and_count_token(token: &str, counts: &mut HashMap<String, usize>) {
+  if JAVASCRIPT_KEYWORDS.contains(&token) {
+    *counts.entry(token.to_string()).or_insert(0) += 1;
+  }
 }
 
 #[cfg(test)]
@@ -450,14 +528,16 @@ mod tests {
     assert_eq!(counts.get("class"), Some(&1));
     assert_eq!(counts.get("void"), Some(&1));
 
-    // Test generics and advanced types
-    let content = "type Result<T> = T | undefined; const x: unknown = null;";
+    // Test that keywords in strings are not counted
+    let content =
+      "type Result<T> = T | undefined; const x: unknown = null; const y: string = 'type';";
     let counts = count_keywords(content);
-    assert_eq!(counts.get("type"), Some(&1));
+    assert_eq!(counts.get("type"), Some(&1)); // Only the actual type keyword, not the string 'type'
     assert_eq!(counts.get("undefined"), Some(&1));
-    assert_eq!(counts.get("const"), Some(&1));
+    assert_eq!(counts.get("const"), Some(&2)); // Two const declarations
     assert_eq!(counts.get("unknown"), Some(&1));
     assert_eq!(counts.get("null"), Some(&1));
+    assert_eq!(counts.get("string"), Some(&1));
   }
 
   #[test]
@@ -498,17 +578,78 @@ mod tests {
     assert_eq!(counts.get("const"), Some(&1));
     assert_eq!(counts.get("true"), Some(&1));
 
-    // Test keywords in comments and strings (should still be counted due to simple tokenization)
+    // Test keywords in comments and strings (should NOT be counted)
     let content = "// This function returns a string\nconst message = \"function test\";";
     let counts = count_keywords(content);
-    assert_eq!(counts.get("function"), Some(&2)); // One in comment, one in string
-    assert_eq!(counts.get("string"), Some(&1));
-    assert_eq!(counts.get("const"), Some(&1));
+    assert_eq!(counts.get("function"), None); // Not counted in comment or string
+    assert_eq!(counts.get("string"), None); // Not counted in comment
+    assert_eq!(counts.get("const"), Some(&1)); // Only the actual const keyword
 
     // Test JSX-like syntax
     let content = "const element = <div className=\"test\">Hello</div>;";
     let counts = count_keywords(content);
     assert_eq!(counts.get("const"), Some(&1));
     assert_eq!(counts.get("div"), None); // HTML tags are not TypeScript keywords
+  }
+
+  #[test]
+  fn test_string_and_comment_exclusion() {
+    // Test single-line comments
+    let content = "const x = 1; // This const should not be counted";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("const"), Some(&1)); // Only the actual const
+
+    // Test multi-line comments
+    let content = "const x = 1; /* const let var */ let y = 2;";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("const"), Some(&1));
+    assert_eq!(counts.get("let"), Some(&1));
+    assert_eq!(counts.get("var"), None); // var is only in comment
+
+    // Test various string types
+    let content = r#"
+      const singleQuote = 'const let var';
+      const doubleQuote = "function class interface";
+      const template = `type string number ${variable}`;
+    "#;
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("const"), Some(&3)); // Three const declarations
+    assert_eq!(counts.get("let"), None); // Only in string
+    assert_eq!(counts.get("var"), None); // Only in string
+    assert_eq!(counts.get("function"), None); // Only in string
+    assert_eq!(counts.get("class"), None); // Only in string
+    assert_eq!(counts.get("interface"), None); // Only in string
+    assert_eq!(counts.get("type"), None); // Only in string
+    assert_eq!(counts.get("string"), None); // Only in string
+    assert_eq!(counts.get("number"), None); // Only in string
+
+    // Test nested quotes (should handle properly)
+    let content = r#"const message = "He said 'hello' to me";"#;
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("const"), Some(&1));
+  }
+
+  #[test]
+  fn test_partial_word_matches() {
+    // Test that keywords within identifiers are NOT counted
+    let content = "const userType = 'user'; function getType() { return mytype; }";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("const"), Some(&1));
+    assert_eq!(counts.get("function"), Some(&1));
+    assert_eq!(counts.get("return"), Some(&1));
+    // These should NOT be counted as they are part of identifiers
+    assert_eq!(counts.get("type"), None); // userType, getType, mytype should not contribute to 'type' count
+
+    // Test with other keywords
+    let content = "let classname = 'test'; const ifCondition = true; var forLoop = 0;";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("let"), Some(&1));
+    assert_eq!(counts.get("const"), Some(&1));
+    assert_eq!(counts.get("var"), Some(&1));
+    assert_eq!(counts.get("true"), Some(&1));
+    // These should NOT be counted
+    assert_eq!(counts.get("class"), None); // classname should not count as 'class'
+    assert_eq!(counts.get("if"), None); // ifCondition should not count as 'if'
+    assert_eq!(counts.get("for"), None); // forLoop should not count as 'for'
   }
 }
