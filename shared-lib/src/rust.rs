@@ -79,15 +79,99 @@ pub fn analyze_file(
 
 pub fn count_keywords(content: &str) -> HashMap<String, usize> {
   let mut counts = HashMap::new();
+  let mut chars = content.chars().peekable();
+  let mut current_token = String::new();
+  let mut in_string = false;
+  let mut in_single_comment = false;
+  let mut in_multi_comment = false;
+  let mut string_char = '\0';
 
-  // Simple tokenization - split on non-alphanumeric characters
-  for word in content.split(|c: char| !c.is_alphanumeric() && c != '_') {
-    if RUST_KEYWORDS.contains(&word) {
-      *counts.entry(word.to_string()).or_insert(0) += 1;
+  while let Some(c) = chars.next() {
+    match c {
+      // Handle single-line comments
+      '/' if !in_string && !in_multi_comment => {
+        if chars.peek() == Some(&'/') {
+          chars.next(); // consume second '/'
+          in_single_comment = true;
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+          continue;
+        } else if chars.peek() == Some(&'*') {
+          chars.next(); // consume '*'
+          in_multi_comment = true;
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+          continue;
+        }
+      }
+      // End multi-line comment
+      '*' if in_multi_comment => {
+        if chars.peek() == Some(&'/') {
+          chars.next(); // consume '/'
+          in_multi_comment = false;
+          continue;
+        }
+      }
+      // End single-line comment
+      '\n' if in_single_comment => {
+        in_single_comment = false;
+        continue;
+      }
+      // Handle strings (double quotes and single quotes for char literals)
+      '"' | '\'' if !in_single_comment && !in_multi_comment => {
+        if !in_string {
+          in_string = true;
+          string_char = c;
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+        } else if c == string_char {
+          in_string = false;
+          string_char = '\0';
+        }
+        continue;
+      }
+      // Handle escape sequences in strings
+      '\\' if in_string => {
+        // Skip the next character if we're in a string (escape sequence)
+        chars.next();
+        continue;
+      }
+      // Skip content inside strings and comments
+      _ if in_string || in_single_comment || in_multi_comment => {
+        continue;
+      }
+      // Handle regular tokens
+      _ => {
+        if c.is_alphanumeric() || c == '_' {
+          current_token.push(c);
+        } else {
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+        }
+      }
     }
   }
 
+  // Check final token
+  if !current_token.is_empty() {
+    check_and_count_token(&current_token, &mut counts);
+  }
+
   counts
+}
+
+fn check_and_count_token(token: &str, counts: &mut HashMap<String, usize>) {
+  if RUST_KEYWORDS.contains(&token) {
+    *counts.entry(token.to_string()).or_insert(0) += 1;
+  }
 }
 
 #[cfg(test)]
@@ -257,23 +341,9 @@ mod tests {
 
     // Reserved Keywords (future-proofing)
     let reserved_keywords = r#"
-            // These are reserved for future use and should be recognized
-            // abstract become box do final macro override priv try typeof unsized virtual yield
-            // Note: These appear in comments since they're not yet implemented
             fn reserved_demonstration() {
-                // abstract - for abstract classes/methods
-                // become - for moves that destructure
-                // box - for box syntax  
-                // do - for do expressions
-                // final - for final classes/methods
-                // macro - for macro definitions
-                // override - for method overriding
-                // priv - for private visibility
-                // try - for try expressions
-                // typeof - for typeof operator
-                // unsized - for unsized types
-                // virtual - for virtual methods
-                // yield - for generator functions
+                // These are reserved for future use - testing them outside comments
+                let _ = (abstract, become, box, do, final, macro, override, priv, try, typeof, unsized, virtual, yield);
             }
         "#;
 
@@ -358,18 +428,76 @@ mod tests {
     assert!(counts.get("my_var").is_none());
     assert!(counts.get("my_function").is_none());
 
-    // Test keywords in comments (should still be counted due to simple tokenization)
+    // Test keywords in comments (should NOT be counted with new implementation)
     let content = "// This is a fn comment with let and if";
     let counts = count_keywords(content);
-    assert_eq!(counts.get("fn"), Some(&1));
-    assert_eq!(counts.get("let"), Some(&1));
-    assert_eq!(counts.get("if"), Some(&1));
+    assert_eq!(counts.get("fn"), None); // Not counted in comment
+    assert_eq!(counts.get("let"), None); // Not counted in comment
+    assert_eq!(counts.get("if"), None); // Not counted in comment
 
-    // Test keywords in strings (should still be counted due to simple tokenization)
+    // Test keywords in strings (should NOT be counted with new implementation)
     let content = r#"let message = "This contains fn keyword";"#;
     let counts = count_keywords(content);
-    assert_eq!(counts.get("let"), Some(&1));
-    assert_eq!(counts.get("fn"), Some(&1));
+    assert_eq!(counts.get("let"), Some(&1)); // Only the actual let keyword
+    assert_eq!(counts.get("fn"), None); // Not counted in string
+  }
+
+  #[test]
+  fn test_string_and_comment_exclusion() {
+    // Test single-line comments
+    let content = "let x = 1; // This let should not be counted";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("let"), Some(&1)); // Only the actual let
+
+    // Test multi-line comments
+    let content = "let x = 1; /* let fn if */ fn test() {}";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("let"), Some(&1)); // Only the actual let
+    assert_eq!(counts.get("fn"), Some(&1)); // Only the actual fn
+    assert_eq!(counts.get("if"), None); // if is only in comment
+
+    // Test various string types
+    let content = r#"
+      let single_quote = 'c';
+      let double_quote = "This has let and fn in it";
+      fn test() { return true; }
+    "#;
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("let"), Some(&2)); // Two let declarations
+    assert_eq!(counts.get("fn"), Some(&1)); // One fn declaration
+    assert_eq!(counts.get("return"), Some(&1)); // One return
+    assert_eq!(counts.get("true"), Some(&1)); // One true
+
+    // Test escape sequences in strings
+    let content = r#"let message = "Quote: \"let x = 42;\""; fn main() {}"#;
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("let"), Some(&1)); // Only the actual let declaration
+    assert_eq!(counts.get("fn"), Some(&1)); // Only the actual fn declaration
+  }
+
+  #[test]
+  fn test_partial_word_matches() {
+    // Test that keywords within identifiers are NOT counted
+    let content = "let lettering = 42; fn function_name() { return return_value; }";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("let"), Some(&1)); // Only the actual let keyword
+    assert_eq!(counts.get("fn"), Some(&1)); // Only the actual fn keyword
+    assert_eq!(counts.get("return"), Some(&1)); // Only the actual return keyword
+
+    // These should NOT be counted as they are part of identifiers
+    assert_eq!(counts.get("lettering"), None);
+    assert_eq!(counts.get("function_name"), None);
+    assert_eq!(counts.get("return_value"), None);
+
+    // Test with type keywords
+    let content = "struct MyStruct { bool_field: bool, string_type: str }";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("struct"), Some(&1));
+    assert_eq!(counts.get("bool"), Some(&1));
+    assert_eq!(counts.get("str"), Some(&1));
+    // These should NOT be counted
+    assert_eq!(counts.get("bool_field"), None);
+    assert_eq!(counts.get("string_type"), None);
   }
 
   #[test]
