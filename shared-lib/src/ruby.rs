@@ -98,11 +98,11 @@ pub fn analyze_directory(
 ) -> Result<(), Box<dyn std::error::Error>> {
   let path = Path::new(path);
 
-  if path.is_file() && is_ruby_file(&path) {
+  if path.is_file() && is_ruby_file(path) {
     eprintln!("Analyzing file: {}", path.display());
     analyze_file(path, total_counts)?;
     *file_count += 1;
-    eprintln!("Files processed: {}", file_count);
+    eprintln!("Files processed: {file_count}");
   } else if path.is_dir() {
     for entry in fs::read_dir(path)? {
       let entry = entry?;
@@ -115,7 +115,7 @@ pub fn analyze_directory(
         eprintln!("Analyzing file: {}", entry_path.display());
         analyze_file(&entry_path, total_counts)?;
         *file_count += 1;
-        eprintln!("Files processed: {}", file_count);
+        eprintln!("Files processed: {file_count}");
       }
     }
   }
@@ -214,11 +214,9 @@ pub fn count_keywords(content: &str) -> HashMap<String, usize> {
       _ => {
         if c.is_alphanumeric() || c == '_' || c == '?' {
           current_token.push(c);
-        } else {
-          if !current_token.is_empty() {
-            check_and_count_token(&current_token, &mut counts);
-            current_token.clear();
-          }
+        } else if !current_token.is_empty() {
+          check_and_count_token(&current_token, &mut counts);
+          current_token.clear();
         }
       }
     }
@@ -469,17 +467,7 @@ mod tests {
 
     // Combine all sections
     let comprehensive_content = format!(
-      "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
-      core_keywords,
-      class_module_definitions,
-      metaprogramming,
-      exception_handling,
-      blocks_procs,
-      string_patterns,
-      object_methods,
-      special_variables,
-      logical_operators,
-      special_keywords
+      "{core_keywords}\n{class_module_definitions}\n{metaprogramming}\n{exception_handling}\n{blocks_procs}\n{string_patterns}\n{object_methods}\n{special_variables}\n{logical_operators}\n{special_keywords}"
     );
 
     let counts = count_keywords(&comprehensive_content);
@@ -487,15 +475,14 @@ mod tests {
     // Verify that ALL keywords are present in the comprehensive example
     let mut missing_keywords = Vec::new();
     for &keyword in RUBY_KEYWORDS {
-      if counts.get(keyword).is_none() {
+      if !counts.contains_key(keyword) {
         missing_keywords.push(keyword);
       }
     }
 
     if !missing_keywords.is_empty() {
       panic!(
-        "The following keywords are missing from the comprehensive test: {:?}",
-        missing_keywords
+        "The following keywords are missing from the comprehensive test: {missing_keywords:?}"
       );
     }
 
@@ -503,8 +490,7 @@ mod tests {
     for &keyword in RUBY_KEYWORDS {
       assert!(
         counts.get(keyword).unwrap_or(&0) >= &1,
-        "Keyword '{}' should appear at least once in the comprehensive example",
-        keyword
+        "Keyword '{keyword}' should appear at least once in the comprehensive example"
       );
     }
 
@@ -620,13 +606,12 @@ mod tests {
   fn test_all_ruby_keywords_recognized() {
     // Test that all keywords in RUBY_KEYWORDS are properly recognized
     for keyword in RUBY_KEYWORDS {
-      let content = format!("{} ", keyword);
+      let content = format!("{keyword} ");
       let counts = count_keywords(&content);
       assert_eq!(
         counts.get(*keyword),
         Some(&1),
-        "Keyword '{}' was not properly counted",
-        keyword
+        "Keyword '{keyword}' was not properly counted"
       );
     }
   }

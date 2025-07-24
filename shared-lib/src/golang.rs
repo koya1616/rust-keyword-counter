@@ -80,11 +80,11 @@ pub fn analyze_directory(
 ) -> Result<(), Box<dyn std::error::Error>> {
   let path = Path::new(path);
 
-  if path.is_file() && is_go_file(&path) {
+  if path.is_file() && is_go_file(path) {
     eprintln!("Analyzing file: {}", path.display());
     analyze_file(path, total_counts)?;
     *file_count += 1;
-    eprintln!("Files processed: {}", file_count);
+    eprintln!("Files processed: {file_count}");
   } else if path.is_dir() {
     for entry in fs::read_dir(path)? {
       let entry = entry?;
@@ -97,7 +97,7 @@ pub fn analyze_directory(
         eprintln!("Analyzing file: {}", entry_path.display());
         analyze_file(&entry_path, total_counts)?;
         *file_count += 1;
-        eprintln!("Files processed: {}", file_count);
+        eprintln!("Files processed: {file_count}");
       }
     }
   }
@@ -211,11 +211,9 @@ pub fn count_keywords(content: &str) -> HashMap<String, usize> {
       _ => {
         if c.is_alphanumeric() || c == '_' {
           current_token.push(c);
-        } else {
-          if !current_token.is_empty() {
-            check_and_count_token(&current_token, &mut counts);
-            current_token.clear();
-          }
+        } else if !current_token.is_empty() {
+          check_and_count_token(&current_token, &mut counts);
+          current_token.clear();
         }
       }
     }

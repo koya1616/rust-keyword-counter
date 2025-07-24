@@ -6,7 +6,7 @@ fn main() {
   let (target_path, output_format, language, output_file) = parse_args(&args);
 
   if !matches!(output_format, OutputFormat::Json) {
-    println!("Analyzing files in: {}", target_path);
+    println!("Analyzing files in: {target_path}");
   }
 
   match KeywordAnalyzer::analyze_path(target_path, language) {
@@ -16,17 +16,13 @@ fn main() {
 
       match KeywordAnalyzer::format_output(&result, output_format, output_file) {
         Ok(message) => {
-          if matches!(output_format, OutputFormat::Plain) {
-            println!("{}", message);
-          } else {
-            println!("{}", message);
-          }
+          println!("{message}");
         }
-        Err(e) => eprintln!("Error formatting output: {}", e),
+        Err(e) => eprintln!("Error formatting output: {e}"),
       }
     }
     Err(e) => {
-      eprintln!("Error: {}", e);
+      eprintln!("Error: {e}");
     }
   }
 }

@@ -147,7 +147,7 @@ pub fn analyze_directory(
 ) -> Result<(), Box<dyn std::error::Error>> {
   let path = Path::new(path);
 
-  if path.is_file() && is_python_file(&path) {
+  if path.is_file() && is_python_file(path) {
     eprintln!("Analyzing file: {}", path.display());
     let content = fs::read_to_string(path)?;
     let file_counts = count_keywords(&content);
@@ -311,11 +311,9 @@ pub fn count_keywords(content: &str) -> HashMap<String, usize> {
       _ => {
         if c.is_alphanumeric() || c == '_' {
           current_token.push(c);
-        } else {
-          if !current_token.is_empty() {
-            check_and_count_token(&current_token, &mut counts);
-            current_token.clear();
-          }
+        } else if !current_token.is_empty() {
+          check_and_count_token(&current_token, &mut counts);
+          current_token.clear();
         }
       }
     }

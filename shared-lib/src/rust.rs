@@ -26,11 +26,11 @@ pub fn analyze_directory(
 ) -> Result<(), Box<dyn std::error::Error>> {
   let path = Path::new(path);
 
-  if path.is_file() && is_rust_file(&path) {
+  if path.is_file() && is_rust_file(path) {
     eprintln!("Analyzing file: {}", path.display());
     analyze_file(path, total_counts)?;
     *file_count += 1;
-    eprintln!("Files processed: {}", file_count);
+    eprintln!("Files processed: {file_count}");
   } else if path.is_dir() {
     for entry in fs::read_dir(path)? {
       let entry = entry?;
@@ -43,7 +43,7 @@ pub fn analyze_directory(
         eprintln!("Analyzing file: {}", entry_path.display());
         analyze_file(&entry_path, total_counts)?;
         *file_count += 1;
-        eprintln!("Files processed: {}", file_count);
+        eprintln!("Files processed: {file_count}");
       }
     }
   }
@@ -60,7 +60,7 @@ pub fn should_skip_dir(path: &Path) -> bool {
 }
 
 pub fn is_rust_file(path: &Path) -> bool {
-  path.extension().map_or(false, |ext| ext == "rs")
+  path.extension().is_some_and(|ext| ext == "rs")
 }
 
 pub fn analyze_file(
@@ -150,11 +150,9 @@ pub fn count_keywords(content: &str) -> HashMap<String, usize> {
       _ => {
         if c.is_alphanumeric() || c == '_' {
           current_token.push(c);
-        } else {
-          if !current_token.is_empty() {
-            check_and_count_token(&current_token, &mut counts);
-            current_token.clear();
-          }
+        } else if !current_token.is_empty() {
+          check_and_count_token(&current_token, &mut counts);
+          current_token.clear();
         }
       }
     }
@@ -349,16 +347,7 @@ mod tests {
 
     // Combine all sections
     let comprehensive_content = format!(
-      "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
-      primitive_types,
-      control_flow,
-      type_definitions,
-      functions,
-      visibility_mutability,
-      modules_scope,
-      async_concurrency,
-      other_keywords,
-      reserved_keywords
+      "{primitive_types}\n{control_flow}\n{type_definitions}\n{functions}\n{visibility_mutability}\n{modules_scope}\n{async_concurrency}\n{other_keywords}\n{reserved_keywords}"
     );
 
     let counts = count_keywords(&comprehensive_content);
@@ -366,15 +355,14 @@ mod tests {
     // Verify that ALL keywords are present in the comprehensive example
     let mut missing_keywords = Vec::new();
     for &keyword in RUST_KEYWORDS {
-      if counts.get(keyword).is_none() {
+      if !counts.contains_key(keyword) {
         missing_keywords.push(keyword);
       }
     }
 
     if !missing_keywords.is_empty() {
       panic!(
-        "The following keywords are missing from the comprehensive test: {:?}",
-        missing_keywords
+        "The following keywords are missing from the comprehensive test: {missing_keywords:?}"
       );
     }
 
@@ -382,8 +370,7 @@ mod tests {
     for &keyword in RUST_KEYWORDS {
       assert!(
         counts.get(keyword).unwrap_or(&0) >= &1,
-        "Keyword '{}' should appear at least once in the comprehensive example",
-        keyword
+        "Keyword '{keyword}' should appear at least once in the comprehensive example"
       );
     }
 
@@ -425,8 +412,8 @@ mod tests {
     assert_eq!(counts.get("let"), Some(&1));
     assert_eq!(counts.get("fn"), Some(&1));
     // my_var and my_function should not be counted as keywords
-    assert!(counts.get("my_var").is_none());
-    assert!(counts.get("my_function").is_none());
+    assert!(!counts.contains_key("my_var"));
+    assert!(!counts.contains_key("my_function"));
 
     // Test keywords in comments (should NOT be counted with new implementation)
     let content = "// This is a fn comment with let and if";
@@ -504,13 +491,12 @@ mod tests {
   fn test_all_rust_keywords_recognized() {
     // Test that all keywords in RUST_KEYWORDS are properly recognized
     for keyword in RUST_KEYWORDS {
-      let content = format!("{} ", keyword);
+      let content = format!("{keyword} ");
       let counts = count_keywords(&content);
       assert_eq!(
         counts.get(*keyword),
         Some(&1),
-        "Keyword '{}' was not properly counted",
-        keyword
+        "Keyword '{keyword}' was not properly counted"
       );
     }
   }

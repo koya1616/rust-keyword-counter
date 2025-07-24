@@ -94,11 +94,11 @@ pub fn analyze_directory(
 ) -> Result<(), Box<dyn std::error::Error>> {
   let path = Path::new(path);
 
-  if path.is_file() && is_javascript_file(&path) {
+  if path.is_file() && is_javascript_file(path) {
     eprintln!("Analyzing file: {}", path.display());
     analyze_file(path, total_counts)?;
     *file_count += 1;
-    eprintln!("Files processed: {}", file_count);
+    eprintln!("Files processed: {file_count}");
   } else if path.is_dir() {
     for entry in fs::read_dir(path)? {
       let entry = entry?;
@@ -111,7 +111,7 @@ pub fn analyze_directory(
         eprintln!("Analyzing file: {}", entry_path.display());
         analyze_file(&entry_path, total_counts)?;
         *file_count += 1;
-        eprintln!("Files processed: {}", file_count);
+        eprintln!("Files processed: {file_count}");
       }
     }
   }
@@ -216,11 +216,9 @@ pub fn count_keywords(content: &str) -> HashMap<String, usize> {
       _ => {
         if c.is_alphanumeric() || c == '_' || c == '$' {
           current_token.push(c);
-        } else {
-          if !current_token.is_empty() {
-            check_and_count_token(&current_token, &mut counts);
-            current_token.clear();
-          }
+        } else if !current_token.is_empty() {
+          check_and_count_token(&current_token, &mut counts);
+          current_token.clear();
         }
       }
     }
@@ -437,39 +435,28 @@ mod tests {
 
     // Combine all sections
     let comprehensive_content = format!(
-      "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
-      imports_exports,
-      classes_oop,
-      interfaces_types,
-      advanced_types,
-      control_flow,
-      async_error_handling,
-      functions_generators,
-      variables_operators,
-      namespaces_globals
+      "{imports_exports}\n{classes_oop}\n{interfaces_types}\n{advanced_types}\n{control_flow}\n{async_error_handling}\n{functions_generators}\n{variables_operators}\n{namespaces_globals}"
     );
 
     let counts = count_keywords(&comprehensive_content);
 
     let mut missing_keywords = Vec::new();
     for &keyword in JAVASCRIPT_KEYWORDS {
-      if counts.get(keyword).is_none() {
+      if !counts.contains_key(keyword) {
         missing_keywords.push(keyword);
       }
     }
 
     if !missing_keywords.is_empty() {
       panic!(
-        "The following keywords are missing from the comprehensive test: {:?}",
-        missing_keywords
+        "The following keywords are missing from the comprehensive test: {missing_keywords:?}"
       );
     }
 
     for &keyword in JAVASCRIPT_KEYWORDS {
       assert!(
         counts.get(keyword).unwrap_or(&0) >= &1,
-        "Keyword '{}' should appear at least once in the comprehensive example",
-        keyword
+        "Keyword '{keyword}' should appear at least once in the comprehensive example"
       );
     }
 
@@ -544,13 +531,12 @@ mod tests {
   fn test_all_javascript_keywords_recognized() {
     // Test that all keywords in JAVASCRIPT_KEYWORDS are properly recognized
     for keyword in JAVASCRIPT_KEYWORDS {
-      let content = format!("{} ", keyword);
+      let content = format!("{keyword} ");
       let counts = count_keywords(&content);
       assert_eq!(
         counts.get(*keyword),
         Some(&1),
-        "Keyword '{}' was not properly counted",
-        keyword
+        "Keyword '{keyword}' was not properly counted"
       );
     }
   }

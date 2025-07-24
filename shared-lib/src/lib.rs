@@ -128,13 +128,13 @@ impl KeywordAnalyzer {
         let file_path =
           output_file.unwrap_or_else(|| generate_default_filename(result.language, "json"));
         write_json_to_file(&sorted_counts, result.file_count, &file_path)?;
-        Ok(format!("JSON results written to: {}", file_path))
+        Ok(format!("JSON results written to: {file_path}"))
       }
       OutputFormat::Csv => {
         let file_path =
           output_file.unwrap_or_else(|| generate_default_filename(result.language, "csv"));
         write_csv_to_file(&sorted_counts, result.file_count, &file_path)?;
-        Ok(format!("CSV results written to: {}", file_path))
+        Ok(format!("CSV results written to: {file_path}"))
       }
       OutputFormat::Html => {
         let file_path =
@@ -145,7 +145,7 @@ impl KeywordAnalyzer {
           result.language,
           &file_path,
         )?;
-        Ok(format!("HTML results written to: {}", file_path))
+        Ok(format!("HTML results written to: {file_path}"))
       }
       OutputFormat::Graph => {
         let file_path =
@@ -156,7 +156,7 @@ impl KeywordAnalyzer {
           result.language,
           &file_path,
         )?;
-        Ok(format!("Graph results written to: {}", file_path))
+        Ok(format!("Graph results written to: {file_path}"))
       }
     }
   }
@@ -209,21 +209,21 @@ pub fn clone_git_repo(url: &str) -> Result<String, Box<dyn std::error::Error>> {
   let temp_dir = format!("/tmp/rust_analyzer_{}", std::process::id());
 
   let normalized_url = if url.starts_with("github.com/") || url.starts_with("gitlab.com/") {
-    format!("https://{}", url)
+    format!("https://{url}")
   } else {
     url.to_string()
   };
 
-  eprintln!("Cloning repository: {}", normalized_url);
-  eprintln!("Target directory: {}", temp_dir);
+  eprintln!("Cloning repository: {normalized_url}");
+  eprintln!("Target directory: {temp_dir}");
 
   let output = Command::new("git")
-    .args(&["clone", "--depth", "1", &normalized_url, &temp_dir])
+    .args(["clone", "--depth", "1", &normalized_url, &temp_dir])
     .output()?;
 
   if !output.status.success() {
     let error_msg = String::from_utf8_lossy(&output.stderr);
-    return Err(format!("Failed to clone repository: {}", error_msg).into());
+    return Err(format!("Failed to clone repository: {error_msg}").into());
   }
 
   eprintln!("Repository cloned successfully");
@@ -245,10 +245,9 @@ fn format_plain(
 
   let mut output = String::new();
   output.push_str(&format!(
-    "\n=== {} Keyword Analysis Results ===\n",
-    language_name
+    "\n=== {language_name} Keyword Analysis Results ===\n"
   ));
-  output.push_str(&format!("Files analyzed: {}\n", file_count));
+  output.push_str(&format!("Files analyzed: {file_count}\n"));
   output.push_str(&format!(
     "Total keywords found: {}\n\n",
     sorted_counts
@@ -259,7 +258,7 @@ fn format_plain(
 
   for (keyword, count) in sorted_counts {
     if **count > 0 {
-      output.push_str(&format!("{:12} : {}\n", keyword, count));
+      output.push_str(&format!("{keyword:12} : {count}\n"));
     }
   }
 
@@ -280,10 +279,7 @@ fn generate_default_filename(language: Language, extension: &str) -> String {
     .unwrap()
     .as_secs();
 
-  format!(
-    "keyword_analysis_{}_{}.{}",
-    language_name, timestamp, extension
-  )
+  format!("keyword_analysis_{language_name}_{timestamp}.{extension}")
 }
 
 fn write_json_to_file(
@@ -298,8 +294,8 @@ fn write_json_to_file(
     .sum::<usize>();
 
   writeln!(file, "{{")?;
-  writeln!(file, "  \"files_analyzed\": {},", file_count)?;
-  writeln!(file, "  \"total_keywords\": {},", total_keywords)?;
+  writeln!(file, "  \"files_analyzed\": {file_count},")?;
+  writeln!(file, "  \"total_keywords\": {total_keywords},")?;
   writeln!(file, "  \"keywords\": {{")?;
 
   let mut first = true;
@@ -308,7 +304,7 @@ fn write_json_to_file(
       if !first {
         writeln!(file, ",")?;
       }
-      write!(file, "    \"{}\": {}", keyword, count)?;
+      write!(file, "    \"{keyword}\": {count}")?;
       first = false;
     }
   }
@@ -319,7 +315,7 @@ fn write_json_to_file(
   writeln!(file, "  }}")?;
   writeln!(file, "}}")?;
 
-  println!("JSON results written to: {}", file_path);
+  println!("JSON results written to: {file_path}");
   Ok(())
 }
 
@@ -335,16 +331,16 @@ fn write_csv_to_file(
     .sum::<usize>();
 
   writeln!(file, "keyword,count")?;
-  writeln!(file, "_files_analyzed,{}", file_count)?;
-  writeln!(file, "_total_keywords,{}", total_keywords)?;
+  writeln!(file, "_files_analyzed,{file_count}")?;
+  writeln!(file, "_total_keywords,{total_keywords}")?;
 
   for (keyword, count) in sorted_counts {
     if **count > 0 {
-      writeln!(file, "{},{}", keyword, count)?;
+      writeln!(file, "{keyword},{count}")?;
     }
   }
 
-  println!("CSV results written to: {}", file_path);
+  println!("CSV results written to: {file_path}");
   Ok(())
 }
 
@@ -371,7 +367,7 @@ fn write_html_to_file(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{} Keyword Analysis Results</title>
+    <title>{language_name} Keyword Analysis Results</title>
     <style>
         body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background-color: #f5f5f5; }}
         .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
@@ -395,22 +391,21 @@ fn write_html_to_file(
 </head>
 <body>
     <div class="container">
-        <h1>{} Keyword Analysis Results</h1>
+        <h1>{language_name} Keyword Analysis Results</h1>
         <div class="summary">
             <h2>Analysis Summary</h2>
             <div class="stat">
-                <div class="stat-value">{}</div>
+                <div class="stat-value">{file_count}</div>
                 <div class="stat-label">Files Analyzed</div>
             </div>
             <div class="stat">
-                <div class="stat-value">{}</div>
+                <div class="stat-value">{total_keywords}</div>
                 <div class="stat-label">Total Keywords Found</div>
             </div>
-        </div>"#,
-    language_name, language_name, file_count, total_keywords
+        </div>"#
   );
 
-  write!(file, "{}", html_content)?;
+  write!(file, "{html_content}")?;
 
   if !sorted_counts.is_empty() && total_keywords > 0 {
     let max_count = sorted_counts
@@ -438,15 +433,14 @@ fn write_html_to_file(
         writeln!(
           file,
           r#"                <tr>
-                    <td class="keyword">{}</td>
-                    <td class="count">{}</td>
+                    <td class="keyword">{keyword}</td>
+                    <td class="count">{count}</td>
                     <td>
                         <div class="progress-bar">
-                            <div class="progress-fill" style="width: {}%;"></div>
+                            <div class="progress-fill" style="width: {percentage}%;"></div>
                         </div>
                     </td>
-                </tr>"#,
-          keyword, count, percentage
+                </tr>"#
         )?;
       }
     }
@@ -473,7 +467,7 @@ fn write_html_to_file(
 </html>"#
   )?;
 
-  println!("HTML results written to: {}", file_path);
+  println!("HTML results written to: {file_path}");
   Ok(())
 }
 
@@ -518,8 +512,7 @@ fn write_graph_to_file(
   writeln!(file, r#"<?xml version="1.0" encoding="UTF-8"?>"#)?;
   writeln!(
     file,
-    "<svg width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\" xmlns=\"http://www.w3.org/2000/svg\">",
-    width, height, width, height
+    "<svg width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\" xmlns=\"http://www.w3.org/2000/svg\">"
   )?;
 
   writeln!(
@@ -551,7 +544,7 @@ fn write_graph_to_file(
   writeln!(file, "    <text x=\"{}\" y=\"50\" class=\"subtitle\">Files: {} | Total Keywords: {} | Top {} Keywords</text>", width / 2, file_count, total_keywords, top_keywords.len())?;
 
   let grid_lines = generate_grid_lines(margin, margin + 30, chart_height);
-  write!(file, "{}", grid_lines)?;
+  write!(file, "{grid_lines}")?;
 
   for (i, (keyword, count)) in top_keywords.iter().enumerate() {
     let x = margin + i * bar_width;
@@ -568,7 +561,7 @@ fn write_graph_to_file(
       bar_height,
       color
     )?;
-    writeln!(file, "        <title>{}: {}</title>", keyword, count)?;
+    writeln!(file, "        <title>{keyword}: {count}</title>")?;
     writeln!(file, "    </rect>")?;
 
     if bar_height > 25 {
@@ -617,10 +610,10 @@ fn write_graph_to_file(
   )?;
 
   let y_labels = generate_y_axis_labels(margin - 10, margin + 30, chart_height, max_count);
-  write!(file, "{}", y_labels)?;
+  write!(file, "{y_labels}")?;
   writeln!(file, "</svg>")?;
 
-  println!("Graph results written to: {}", file_path);
+  println!("Graph results written to: {file_path}");
   Ok(())
 }
 
@@ -680,8 +673,8 @@ pub fn generate_json_content(sorted_counts: &[(&String, &usize)], file_count: us
 
   let mut json = String::new();
   json.push_str("{\n");
-  json.push_str(&format!("  \"files_analyzed\": {},\n", file_count));
-  json.push_str(&format!("  \"total_keywords\": {},\n", total_keywords));
+  json.push_str(&format!("  \"files_analyzed\": {file_count},\n"));
+  json.push_str(&format!("  \"total_keywords\": {total_keywords},\n"));
   json.push_str("  \"keywords\": {\n");
 
   let mut first = true;
@@ -690,7 +683,7 @@ pub fn generate_json_content(sorted_counts: &[(&String, &usize)], file_count: us
       if !first {
         json.push_str(",\n");
       }
-      json.push_str(&format!("    \"{}\": {}", keyword, count));
+      json.push_str(&format!("    \"{keyword}\": {count}"));
       first = false;
     }
   }
@@ -699,7 +692,7 @@ pub fn generate_json_content(sorted_counts: &[(&String, &usize)], file_count: us
     json.push('\n');
   }
   json.push_str("  }\n");
-  json.push_str("}");
+  json.push('}');
 
   json
 }
@@ -725,7 +718,7 @@ pub fn generate_html_content(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{} Keyword Analysis Results</title>
+    <title>{language_name} Keyword Analysis Results</title>
     <style>
         body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background-color: #f5f5f5; }}
         .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
@@ -749,19 +742,18 @@ pub fn generate_html_content(
 </head>
 <body>
     <div class="container">
-        <h1>{} Keyword Analysis Results</h1>
+        <h1>{language_name} Keyword Analysis Results</h1>
         <div class="summary">
             <h2>Analysis Summary</h2>
             <div class="stat">
-                <div class="stat-value">{}</div>
+                <div class="stat-value">{file_count}</div>
                 <div class="stat-label">Files Analyzed</div>
             </div>
             <div class="stat">
-                <div class="stat-value">{}</div>
+                <div class="stat-value">{total_keywords}</div>
                 <div class="stat-label">Total Keywords Found</div>
             </div>
-        </div>"#,
-    language_name, language_name, file_count, total_keywords
+        </div>"#
   );
 
   if !sorted_counts.is_empty() && total_keywords > 0 {
@@ -788,15 +780,14 @@ pub fn generate_html_content(
         let percentage = ((**count as f64) / (max_count as f64) * 100.0) as u32;
         html.push_str(&format!(
           r#"                <tr>
-                    <td class="keyword">{}</td>
-                    <td class="count">{}</td>
+                    <td class="keyword">{keyword}</td>
+                    <td class="count">{count}</td>
                     <td>
                         <div class="progress-bar">
-                            <div class="progress-fill" style="width: {}%;"></div>
+                            <div class="progress-fill" style="width: {percentage}%;"></div>
                         </div>
                     </td>
-                </tr>"#,
-          keyword, count, percentage
+                </tr>"#
         ));
       }
     }

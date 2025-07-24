@@ -5,7 +5,6 @@ use axum::{
   Router,
 };
 use serde::{Deserialize, Serialize};
-use tokio;
 
 use keyword_analyzer_shared::{
   generate_html_content, generate_json_content, is_git_url, is_valid_github_repo_url,
@@ -70,9 +69,7 @@ async fn analyze_repository(
 
   // Validate that repository_url is GitHub or GitLab only
   if !is_git_url(&request.repository_url) {
-    let error_response = format!(
-      r#"{{"success": false, "data": null, "error": "Only GitHub and GitLab repository URLs are supported. Expected format: https://github.com/username/repository or https://gitlab.com/username/repository"}}"#
-    );
+    let error_response = r#"{"success": false, "data": null, "error": "Only GitHub and GitLab repository URLs are supported. Expected format: https://github.com/username/repository or https://gitlab.com/username/repository"}"#.to_string();
     return Ok(
       Response::builder()
         .status(StatusCode::BAD_REQUEST)
@@ -86,9 +83,7 @@ async fn analyze_repository(
   if request.repository_url.contains("github.com")
     && !is_valid_github_repo_url(&request.repository_url)
   {
-    let error_response = format!(
-      r#"{{"success": false, "data": null, "error": "Invalid GitHub repository URL format. Expected format: https://github.com/username/repository"}}"#
-    );
+    let error_response = r#"{"success": false, "data": null, "error": "Invalid GitHub repository URL format. Expected format: https://github.com/username/repository"}"#.to_string();
     return Ok(
       Response::builder()
         .status(StatusCode::BAD_REQUEST)
@@ -102,9 +97,7 @@ async fn analyze_repository(
   if request.repository_url.contains("gitlab.com")
     && !is_valid_gitlab_repo_url(&request.repository_url)
   {
-    let error_response = format!(
-      r#"{{"success": false, "data": null, "error": "Invalid GitLab repository URL format. Expected format: https://gitlab.com/username/repository"}}"#
-    );
+    let error_response = r#"{"success": false, "data": null, "error": "Invalid GitLab repository URL format. Expected format: https://gitlab.com/username/repository"}"#.to_string();
     return Ok(
       Response::builder()
         .status(StatusCode::BAD_REQUEST)
