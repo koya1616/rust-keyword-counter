@@ -150,7 +150,11 @@ pub fn analyze_directory(
   if path.is_file() && is_python_file(&path) {
     eprintln!("Analyzing file: {}", path.display());
     let content = fs::read_to_string(path)?;
-    count_keywords(&content, total_counts);
+    let file_counts = count_keywords(&content);
+
+    for (keyword, count) in file_counts {
+      *total_counts.entry(keyword).or_insert(0) += count;
+    }
     *file_count += 1;
     eprintln!("Files processed: {}", *file_count);
   } else if path.is_dir() {
@@ -168,7 +172,11 @@ pub fn analyze_directory(
       } else if is_python_file(&entry_path) {
         eprintln!("Analyzing file: {}", entry_path.display());
         let content = fs::read_to_string(&entry_path)?;
-        count_keywords(&content, total_counts);
+        let file_counts = count_keywords(&content);
+
+        for (keyword, count) in file_counts {
+          *total_counts.entry(keyword).or_insert(0) += count;
+        }
         *file_count += 1;
         eprintln!("Files processed: {}", *file_count);
       }
@@ -223,52 +231,108 @@ fn should_skip_dir(path: &Path) -> bool {
   }
 }
 
-fn count_keywords(content: &str, total_counts: &mut HashMap<String, usize>) {
-  // Initialize all keywords with 0
-  for keyword in PYTHON_KEYWORDS {
-    total_counts.entry(keyword.to_string()).or_insert(0);
-  }
+pub fn count_keywords(content: &str) -> HashMap<String, usize> {
+  let mut counts = HashMap::new();
+  let mut chars = content.chars().peekable();
+  let mut current_token = String::new();
+  let mut in_string = false;
+  let mut in_comment = false;
+  let mut string_char = '\0';
+  let mut in_triple_quote = false;
+  let mut triple_quote_type = '\0';
 
-  for keyword in PYTHON_KEYWORDS {
-    let count = count_keyword(content, keyword);
-    *total_counts.entry(keyword.to_string()).or_insert(0) += count;
-  }
-}
-
-fn count_keyword(content: &str, keyword: &str) -> usize {
-  if keyword.is_empty() || content.is_empty() {
-    return 0;
-  }
-
-  let mut count = 0;
-  let keyword_bytes = keyword.as_bytes();
-  let content_bytes = content.as_bytes();
-
-  if keyword_bytes.len() > content_bytes.len() {
-    return 0;
-  }
-
-  let mut i = 0;
-  while i <= content_bytes.len() - keyword_bytes.len() {
-    // Check if we found the keyword
-    if content_bytes[i..i + keyword_bytes.len()] == *keyword_bytes {
-      // Check boundaries to ensure it's a whole word
-      let is_start_boundary = i == 0 || !is_identifier_char(content_bytes[i - 1]);
-      let is_end_boundary = i + keyword_bytes.len() >= content_bytes.len()
-        || !is_identifier_char(content_bytes[i + keyword_bytes.len()]);
-
-      if is_start_boundary && is_end_boundary {
-        count += 1;
+  while let Some(c) = chars.next() {
+    match c {
+      // Handle single-line comments (Python uses #)
+      '#' if !in_string && !in_triple_quote => {
+        in_comment = true;
+        if !current_token.is_empty() {
+          check_and_count_token(&current_token, &mut counts);
+          current_token.clear();
+        }
+        continue;
+      }
+      // End single-line comment
+      '\n' if in_comment => {
+        in_comment = false;
+        continue;
+      }
+      // Handle triple quotes (Python docstrings)
+      '"' | '\'' if !in_comment => {
+        if !in_string && !in_triple_quote {
+          // Check for triple quotes
+          if chars.peek() == Some(&c) {
+            chars.next(); // consume second quote
+            if chars.peek() == Some(&c) {
+              chars.next(); // consume third quote
+              in_triple_quote = true;
+              triple_quote_type = c;
+            } else {
+              // Two quotes, treat as empty string
+              in_string = true;
+              string_char = c;
+            }
+          } else {
+            // Single quote string
+            in_string = true;
+            string_char = c;
+          }
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+        } else if in_triple_quote && c == triple_quote_type {
+          // Check for end of triple quote
+          if chars.peek() == Some(&c) {
+            chars.next(); // consume second quote
+            if chars.peek() == Some(&c) {
+              chars.next(); // consume third quote
+              in_triple_quote = false;
+              triple_quote_type = '\0';
+            }
+          }
+        } else if in_string && c == string_char {
+          in_string = false;
+          string_char = '\0';
+        }
+        continue;
+      }
+      // Handle escape sequences in strings
+      '\\' if in_string && !in_triple_quote => {
+        // Skip the next character if we're in a string (escape sequence)
+        chars.next();
+        continue;
+      }
+      // Skip content inside strings, triple quotes, and comments
+      _ if in_string || in_triple_quote || in_comment => {
+        continue;
+      }
+      // Handle regular tokens
+      _ => {
+        if c.is_alphanumeric() || c == '_' {
+          current_token.push(c);
+        } else {
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+        }
       }
     }
-    i += 1;
   }
 
-  count
+  // Check final token
+  if !current_token.is_empty() {
+    check_and_count_token(&current_token, &mut counts);
+  }
+
+  counts
 }
 
-fn is_identifier_char(c: u8) -> bool {
-  c.is_ascii_alphanumeric() || c == b'_'
+fn check_and_count_token(token: &str, counts: &mut HashMap<String, usize>) {
+  if PYTHON_KEYWORDS.contains(&token) {
+    *counts.entry(token.to_string()).or_insert(0) += 1;
+  }
 }
 
 #[cfg(test)]
@@ -300,62 +364,6 @@ mod tests {
     assert!(!should_skip_dir(Path::new("src")));
     assert!(!should_skip_dir(Path::new("tests")));
     assert!(!should_skip_dir(Path::new("lib")));
-  }
-
-  #[test]
-  fn test_count_keyword() {
-    let content = "def hello():\n    print('Hello, world!')\n    return True";
-
-    assert_eq!(count_keyword(content, "def"), 1);
-    assert_eq!(count_keyword(content, "print"), 1);
-    assert_eq!(count_keyword(content, "return"), 1);
-    assert_eq!(count_keyword(content, "True"), 1);
-    assert_eq!(count_keyword(content, "false"), 0); // Case sensitive
-    assert_eq!(count_keyword(content, "class"), 0);
-  }
-
-  #[test]
-  fn test_count_keyword_word_boundaries() {
-    let content = "class MyClass:\n    def __init__(self):\n        self.class_name = 'test'";
-
-    // Should find 'class' keyword but not in 'class_name'
-    assert_eq!(count_keyword(content, "class"), 1);
-    assert_eq!(count_keyword(content, "def"), 1);
-    assert_eq!(count_keyword(content, "__init__"), 1);
-    assert_eq!(count_keyword(content, "self"), 2);
-  }
-
-  #[test]
-  fn test_count_keyword_edge_cases() {
-    // Test empty content
-    assert_eq!(count_keyword("", "def"), 0);
-
-    // Test content without keywords
-    assert_eq!(count_keyword("hello world", "def"), 0);
-
-    // Test keyword at start/end
-    assert_eq!(count_keyword("def", "def"), 1);
-    assert_eq!(count_keyword("def func", "def"), 1);
-    assert_eq!(count_keyword("func def", "def"), 1);
-
-    // Test multiple occurrences
-    assert_eq!(count_keyword("def f(): def g(): pass", "def"), 2);
-    assert_eq!(count_keyword("def f(): def g(): pass", "pass"), 1);
-  }
-
-  #[test]
-  fn test_is_identifier_char() {
-    assert!(is_identifier_char(b'a'));
-    assert!(is_identifier_char(b'Z'));
-    assert!(is_identifier_char(b'0'));
-    assert!(is_identifier_char(b'9'));
-    assert!(is_identifier_char(b'_'));
-
-    assert!(!is_identifier_char(b' '));
-    assert!(!is_identifier_char(b'('));
-    assert!(!is_identifier_char(b')'));
-    assert!(!is_identifier_char(b':'));
-    assert!(!is_identifier_char(b'.'));
   }
 
   #[test]
@@ -407,7 +415,10 @@ with open("file.txt") as f:
 lambda x: x * 2
 "#;
 
-    count_keywords(basic_content, &mut test_counts);
+    let file_counts = count_keywords(basic_content);
+    for (keyword, count) in file_counts {
+      *test_counts.entry(keyword).or_insert(0) += count;
+    }
 
     // Check that basic keywords are found
     assert!(*test_counts.get("def").unwrap_or(&0) >= 3);
@@ -460,7 +471,10 @@ unique = set([1, 2, 2, 3])
 ordered = sorted([3, 1, 2])
 "#;
 
-    count_keywords(built_in_content, &mut test_counts);
+    let file_counts = count_keywords(built_in_content);
+    for (keyword, count) in file_counts {
+      *test_counts.entry(keyword).or_insert(0) += count;
+    }
 
     // Check built-in functions
     assert!(*test_counts.get("len").unwrap_or(&0) >= 1);
@@ -479,6 +493,77 @@ ordered = sorted([3, 1, 2])
     assert!(*test_counts.get("sorted").unwrap_or(&0) >= 1);
     assert!(*test_counts.get("True").unwrap_or(&0) >= 3);
     assert!(*test_counts.get("False").unwrap_or(&0) >= 2);
+  }
+
+  #[test]
+  fn test_string_and_comment_exclusion() {
+    // Test single-line comments
+    let content = "def actual_function():\n    # This def should not be counted\n    pass";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("def"), Some(&1)); // Only the actual def
+    assert_eq!(counts.get("pass"), Some(&1)); // Only the actual pass
+
+    // Test various string types
+    let content = r#"
+      def main():
+          single_quote = 'def test(): pass'
+          double_quote = "This contains def and class keywords"
+          return True
+    "#;
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("def"), Some(&1)); // One def declaration
+    assert_eq!(counts.get("return"), Some(&1)); // One return statement
+    assert_eq!(counts.get("True"), Some(&1)); // One True literal
+                                              // These should NOT be counted as they're in strings
+    assert_eq!(counts.get("test"), None); // Only in string
+    assert_eq!(counts.get("pass"), None); // Only in string
+    assert_eq!(counts.get("class"), None); // Only in string
+
+    // Test triple quote strings (docstrings)
+    let content = r#"
+def documented_function():
+    """
+    This def function should not be counted in the docstring.
+    Also class and if keywords should be ignored.
+    """
+    if True:
+        pass
+"#;
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("def"), Some(&1)); // Only the actual def
+    assert_eq!(counts.get("if"), Some(&1)); // Only the actual if
+    assert_eq!(counts.get("True"), Some(&1)); // Only the actual True
+    assert_eq!(counts.get("pass"), Some(&1)); // Only the actual pass
+                                              // These should NOT be counted as they're in docstring
+    assert_eq!(counts.get("class"), None); // Only in docstring
+
+    // Test escape sequences in strings
+    let content = r#"message = "Quote: \"def test()\""; def actual_function(): pass"#;
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("def"), Some(&1)); // Only the actual def declaration
+    assert_eq!(counts.get("pass"), Some(&1)); // Only the actual pass statement
+  }
+
+  #[test]
+  fn test_partial_word_matches() {
+    // Test that keywords within identifiers are NOT counted
+    let content = "def define_function(): return return_value";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("def"), Some(&1)); // Only the actual def keyword
+    assert_eq!(counts.get("return"), Some(&1)); // Only the actual return keyword
+
+    // These should NOT be counted as they are part of identifiers
+    assert_eq!(counts.get("define_function"), None);
+    assert_eq!(counts.get("return_value"), None);
+
+    // Test with Python-specific tokens
+    let content = "import sys; class MyClass: pass; def __init__(self): pass";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("import"), Some(&1));
+    assert_eq!(counts.get("class"), Some(&1));
+    assert_eq!(counts.get("def"), Some(&1));
+    assert_eq!(counts.get("pass"), Some(&2)); // Two pass statements
+    assert_eq!(counts.get("__init__"), Some(&1)); // Special method name
   }
 
   #[test]
