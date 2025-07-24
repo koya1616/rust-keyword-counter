@@ -686,7 +686,7 @@ mod tests {
     assert_eq!(counts.get("return"), Some(&1)); // One return statement
     assert_eq!(counts.get("true"), Some(&1)); // One true literal
     assert_eq!(counts.get("end"), Some(&1)); // One end statement
-    // These should NOT be counted as they're in strings
+                                             // These should NOT be counted as they're in strings
     assert_eq!(counts.get("class"), None); // Only in string
     assert_eq!(counts.get("if"), None); // Only in string
 
@@ -705,11 +705,11 @@ mod tests {
     assert_eq!(counts.get("def"), Some(&1)); // Only the actual def keyword
     assert_eq!(counts.get("return"), Some(&1)); // Only the actual return keyword
     assert_eq!(counts.get("end"), Some(&1)); // Only the actual end keyword
-    
+
     // These should NOT be counted as they are part of identifiers
     assert_eq!(counts.get("define_method"), None);
     assert_eq!(counts.get("return_value"), None);
-    
+
     // Test with question mark methods
     let content = "def test?; if respond_to?(:method); return true; end; end";
     let counts = count_keywords(content);

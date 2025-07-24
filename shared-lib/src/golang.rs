@@ -129,39 +129,110 @@ fn analyze_file(
   total_counts: &mut HashMap<String, usize>,
 ) -> Result<(), Box<dyn std::error::Error>> {
   let content = fs::read_to_string(path)?;
+  let file_counts = count_keywords(&content);
 
-  for keyword in GOLANG_KEYWORDS {
-    let count = count_keyword(&content, keyword);
-    *total_counts.entry(keyword.to_string()).or_insert(0) += count;
+  for (keyword, count) in file_counts {
+    *total_counts.entry(keyword).or_insert(0) += count;
   }
 
   Ok(())
 }
 
-fn count_keyword(content: &str, keyword: &str) -> usize {
-  let mut count = 0;
-  let keyword_bytes = keyword.as_bytes();
-  let content_bytes = content.as_bytes();
+pub fn count_keywords(content: &str) -> HashMap<String, usize> {
+  let mut counts = HashMap::new();
+  let mut chars = content.chars().peekable();
+  let mut current_token = String::new();
+  let mut in_string = false;
+  let mut in_single_comment = false;
+  let mut in_multi_comment = false;
+  let mut string_char = '\0';
 
-  for i in 0..content_bytes.len() {
-    if i + keyword_bytes.len() <= content_bytes.len() {
-      if content_bytes[i..i + keyword_bytes.len()] == *keyword_bytes {
-        let is_word_boundary_before = i == 0 || !is_identifier_char(content_bytes[i - 1]);
-        let is_word_boundary_after = i + keyword_bytes.len() == content_bytes.len()
-          || !is_identifier_char(content_bytes[i + keyword_bytes.len()]);
-
-        if is_word_boundary_before && is_word_boundary_after {
-          count += 1;
+  while let Some(c) = chars.next() {
+    match c {
+      // Handle single-line comments
+      '/' if !in_string && !in_multi_comment => {
+        if chars.peek() == Some(&'/') {
+          chars.next(); // consume second '/'
+          in_single_comment = true;
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+          continue;
+        } else if chars.peek() == Some(&'*') {
+          chars.next(); // consume '*'
+          in_multi_comment = true;
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+          continue;
+        }
+      }
+      // End multi-line comment
+      '*' if in_multi_comment => {
+        if chars.peek() == Some(&'/') {
+          chars.next(); // consume '/'
+          in_multi_comment = false;
+          continue;
+        }
+      }
+      // End single-line comment
+      '\n' if in_single_comment => {
+        in_single_comment = false;
+        continue;
+      }
+      // Handle strings (double quotes, single quotes, and backticks for raw strings)
+      '"' | '\'' | '`' if !in_single_comment && !in_multi_comment => {
+        if !in_string {
+          in_string = true;
+          string_char = c;
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
+        } else if c == string_char {
+          in_string = false;
+          string_char = '\0';
+        }
+        continue;
+      }
+      // Handle escape sequences in strings (but not in raw strings with backticks)
+      '\\' if in_string && string_char != '`' => {
+        // Skip the next character if we're in a string (escape sequence)
+        chars.next();
+        continue;
+      }
+      // Skip content inside strings and comments
+      _ if in_string || in_single_comment || in_multi_comment => {
+        continue;
+      }
+      // Handle regular tokens
+      _ => {
+        if c.is_alphanumeric() || c == '_' {
+          current_token.push(c);
+        } else {
+          if !current_token.is_empty() {
+            check_and_count_token(&current_token, &mut counts);
+            current_token.clear();
+          }
         }
       }
     }
   }
 
-  count
+  // Check final token
+  if !current_token.is_empty() {
+    check_and_count_token(&current_token, &mut counts);
+  }
+
+  counts
 }
 
-fn is_identifier_char(c: u8) -> bool {
-  c.is_ascii_alphanumeric() || c == b'_'
+fn check_and_count_token(token: &str, counts: &mut HashMap<String, usize>) {
+  if GOLANG_KEYWORDS.contains(&token) {
+    *counts.entry(token.to_string()).or_insert(0) += 1;
+  }
 }
 
 #[cfg(test)]
@@ -270,82 +341,6 @@ mod tests {
   }
 
   #[test]
-  fn test_count_keyword() {
-    let code = r#"
-package main
-
-import "fmt"
-
-func main() {
-    var message string = "Hello, World!"
-    fmt.Println(message)
-    
-    for i := 0; i < 10; i++ {
-        if i%2 == 0 {
-            fmt.Printf("Even: %d\n", i)
-        } else {
-            fmt.Printf("Odd: %d\n", i)
-        }
-    }
-}
-"#;
-
-    assert_eq!(count_keyword(code, "package"), 1);
-    assert_eq!(count_keyword(code, "func"), 1);
-    assert_eq!(count_keyword(code, "var"), 1);
-    assert_eq!(count_keyword(code, "string"), 1);
-    assert_eq!(count_keyword(code, "for"), 1);
-    assert_eq!(count_keyword(code, "if"), 1);
-    assert_eq!(count_keyword(code, "else"), 1);
-    assert_eq!(count_keyword(code, "import"), 1);
-
-    // Test that count_keyword counts any string occurrence (fmt appears 4 times)
-    assert_eq!(count_keyword(code, "fmt"), 4);
-
-    // Test that count_keyword counts any string occurrence (main appears 2 times)
-    assert_eq!(count_keyword(code, "main"), 2);
-  }
-
-  #[test]
-  fn test_count_keyword_word_boundaries() {
-    let code = r#"
-package main
-var variable int
-var packagename string
-func function() {}
-"#;
-
-    assert_eq!(count_keyword(code, "package"), 1); // Should not match "packagename"
-    assert_eq!(count_keyword(code, "var"), 2);
-    assert_eq!(count_keyword(code, "func"), 1); // Should not match "function"
-    assert_eq!(count_keyword(code, "int"), 1);
-  }
-
-  #[test]
-  fn test_count_keyword_edge_cases() {
-    // Empty string
-    assert_eq!(count_keyword("", "func"), 0);
-
-    // Only keyword
-    assert_eq!(count_keyword("func", "func"), 1);
-
-    // Keyword at start
-    assert_eq!(count_keyword("func main() {}", "func"), 1);
-
-    // Keyword at end
-    assert_eq!(count_keyword("return nil", "nil"), 1);
-
-    // Multiple occurrences
-    assert_eq!(count_keyword("var a, var b, var c", "var"), 3);
-
-    // Keyword in string (should still count - this is a simple keyword counter)
-    assert_eq!(count_keyword("\"func in string\"", "func"), 1);
-
-    // Keyword in comment (should still count - this is a simple keyword counter)
-    assert_eq!(count_keyword("// func comment", "func"), 1);
-  }
-
-  #[test]
   fn test_analyze_file_mock() {
     // Mock test for analyze_file function signature
     fn _test_signature() {
@@ -364,31 +359,6 @@ func function() {}
     assert_eq!(counts.get("func"), Some(&5));
     assert_eq!(counts.get("var"), Some(&3));
     assert_eq!(counts.get("nonexistent"), None);
-  }
-
-  #[test]
-  fn test_is_identifier_char() {
-    // Test alphanumeric characters
-    assert!(is_identifier_char(b'a'));
-    assert!(is_identifier_char(b'Z'));
-    assert!(is_identifier_char(b'0'));
-    assert!(is_identifier_char(b'9'));
-    assert!(is_identifier_char(b'_'));
-
-    // Test non-identifier characters
-    assert!(!is_identifier_char(b' '));
-    assert!(!is_identifier_char(b'.'));
-    assert!(!is_identifier_char(b'('));
-    assert!(!is_identifier_char(b')'));
-    assert!(!is_identifier_char(b'{'));
-    assert!(!is_identifier_char(b'}'));
-    assert!(!is_identifier_char(b'['));
-    assert!(!is_identifier_char(b']'));
-    assert!(!is_identifier_char(b','));
-    assert!(!is_identifier_char(b';'));
-    assert!(!is_identifier_char(b':'));
-    assert!(!is_identifier_char(b'\n'));
-    assert!(!is_identifier_char(b'\t'));
   }
 
   #[test]
@@ -412,6 +382,68 @@ func function() {}
 
     assert_eq!(file_count, 1);
     assert_eq!(counts.get("test"), Some(&1));
+  }
+
+  #[test]
+  fn test_string_and_comment_exclusion() {
+    // Test single-line comments
+    let content = "package main\n// This func should not be counted\nfunc actual() {}";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("package"), Some(&1));
+    assert_eq!(counts.get("func"), Some(&1)); // Only the actual func
+
+    // Test multi-line comments
+    let content = "package main\n/* func var const */ func real() {}";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("package"), Some(&1));
+    assert_eq!(counts.get("func"), Some(&1)); // Only the actual func
+    assert_eq!(counts.get("var"), None); // Only in comment
+    assert_eq!(counts.get("const"), None); // Only in comment
+
+    // Test various string types
+    let content = r#"
+      package main
+      var single_quote = 'func'
+      var double_quote = "This contains var and const keywords"  
+      var raw_string = `func test() { return }`
+      func main() {}
+    "#;
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("package"), Some(&1));
+    assert_eq!(counts.get("var"), Some(&3)); // Three var declarations
+    assert_eq!(counts.get("func"), Some(&1)); // One func declaration
+                                              // These should NOT be counted as they're in strings
+    assert_eq!(counts.get("const"), None); // Only in string
+
+    // Test escape sequences in strings
+    let content = r#"package main; var message = "Quote: \"func test()\""; func actual() {}"#;
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("package"), Some(&1));
+    assert_eq!(counts.get("var"), Some(&1));
+    assert_eq!(counts.get("func"), Some(&1)); // Only the actual func declaration
+  }
+
+  #[test]
+  fn test_partial_word_matches() {
+    // Test that keywords within identifiers are NOT counted
+    let content = "package main; var function_name = \"test\"; func package_handler() { return }";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("package"), Some(&1)); // Only the actual package keyword
+    assert_eq!(counts.get("var"), Some(&1)); // Only the actual var keyword
+    assert_eq!(counts.get("func"), Some(&1)); // Only the actual func keyword
+    assert_eq!(counts.get("return"), Some(&1)); // Only the actual return keyword
+
+    // These should NOT be counted as they are part of identifiers
+    assert_eq!(counts.get("function_name"), None);
+    assert_eq!(counts.get("package_handler"), None);
+
+    // Test Go-specific tokens
+    let content = "package main; type interface_test interface {}; func main() {}";
+    let counts = count_keywords(content);
+    assert_eq!(counts.get("package"), Some(&1));
+    assert_eq!(counts.get("type"), Some(&1));
+    assert_eq!(counts.get("interface"), Some(&1));
+    assert_eq!(counts.get("func"), Some(&1));
   }
 
   #[test]
@@ -498,30 +530,32 @@ func someFunction() error {
 "#;
 
     // Test comprehensive keyword counting
-    assert!(count_keyword(complex_go_code, "package") >= 1);
-    assert!(count_keyword(complex_go_code, "import") >= 1);
-    assert!(count_keyword(complex_go_code, "type") >= 2);
-    assert!(count_keyword(complex_go_code, "struct") >= 1);
-    assert!(count_keyword(complex_go_code, "interface") >= 1);
-    assert!(count_keyword(complex_go_code, "func") >= 3);
-    assert!(count_keyword(complex_go_code, "var") >= 1);
-    assert!(count_keyword(complex_go_code, "const") >= 1);
-    assert!(count_keyword(complex_go_code, "chan") >= 1);
-    assert!(count_keyword(complex_go_code, "make") >= 3);
-    assert!(count_keyword(complex_go_code, "go") >= 1);
-    assert!(count_keyword(complex_go_code, "defer") >= 1);
-    assert!(count_keyword(complex_go_code, "select") >= 1);
-    assert!(count_keyword(complex_go_code, "case") >= 2);
-    assert!(count_keyword(complex_go_code, "for") >= 2);
-    assert!(count_keyword(complex_go_code, "switch") >= 1);
-    assert!(count_keyword(complex_go_code, "default") >= 1);
-    assert!(count_keyword(complex_go_code, "if") >= 1);
-    assert!(count_keyword(complex_go_code, "range") >= 1);
-    assert!(count_keyword(complex_go_code, "return") >= 2);
-    assert!(count_keyword(complex_go_code, "nil") >= 2);
-    assert!(count_keyword(complex_go_code, "panic") >= 1);
-    assert!(count_keyword(complex_go_code, "append") >= 1);
-    assert!(count_keyword(complex_go_code, "string") >= 2);
-    assert!(count_keyword(complex_go_code, "int") >= 2);
+    let counts = count_keywords(complex_go_code);
+
+    assert!(counts.get("package").unwrap_or(&0) >= &1);
+    assert!(counts.get("import").unwrap_or(&0) >= &1);
+    assert!(counts.get("type").unwrap_or(&0) >= &2);
+    assert!(counts.get("struct").unwrap_or(&0) >= &1);
+    assert!(counts.get("interface").unwrap_or(&0) >= &1);
+    assert!(counts.get("func").unwrap_or(&0) >= &3);
+    assert!(counts.get("var").unwrap_or(&0) >= &1);
+    assert!(counts.get("const").unwrap_or(&0) >= &1);
+    assert!(counts.get("chan").unwrap_or(&0) >= &1);
+    assert!(counts.get("make").unwrap_or(&0) >= &3);
+    assert!(counts.get("go").unwrap_or(&0) >= &1);
+    assert!(counts.get("defer").unwrap_or(&0) >= &1);
+    assert!(counts.get("select").unwrap_or(&0) >= &1);
+    assert!(counts.get("case").unwrap_or(&0) >= &2);
+    assert!(counts.get("for").unwrap_or(&0) >= &2);
+    assert!(counts.get("switch").unwrap_or(&0) >= &1);
+    assert!(counts.get("default").unwrap_or(&0) >= &1);
+    assert!(counts.get("if").unwrap_or(&0) >= &1);
+    assert!(counts.get("range").unwrap_or(&0) >= &1);
+    assert!(counts.get("return").unwrap_or(&0) >= &2);
+    assert!(counts.get("nil").unwrap_or(&0) >= &2);
+    assert!(counts.get("panic").unwrap_or(&0) >= &1);
+    assert!(counts.get("append").unwrap_or(&0) >= &1);
+    assert!(counts.get("string").unwrap_or(&0) >= &2);
+    assert!(counts.get("int").unwrap_or(&0) >= &2);
   }
 }
