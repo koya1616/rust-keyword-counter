@@ -139,7 +139,13 @@ pub fn analyze_file(
   path: &Path,
   total_counts: &mut HashMap<String, usize>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-  let content = fs::read_to_string(path)?;
+  let content = match fs::read_to_string(path) {
+    Ok(content) => content,
+    Err(e) => {
+      eprintln!("Warning: Skipping file {} due to encoding error: {}", path.display(), e);
+      return Ok(());
+    }
+  };
   let file_counts = count_keywords(&content);
 
   for (keyword, count) in file_counts {
