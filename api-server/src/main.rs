@@ -159,6 +159,7 @@ fn parse_language(lang_str: &str) -> Result<Language, StatusCode> {
     "ruby" | "rb" => Ok(Language::Ruby),
     "go" | "golang" => Ok(Language::Golang),
     "python" | "py" => Ok(Language::Python),
+    "dart" => Ok(Language::Dart),
     _ => Err(StatusCode::BAD_REQUEST),
   }
 }
@@ -319,6 +320,7 @@ mod tests {
     assert!(parse_language("golang").is_ok());
     assert!(parse_language("python").is_ok());
     assert!(parse_language("py").is_ok());
+    assert!(parse_language("dart").is_ok());
   }
 
   #[tokio::test]

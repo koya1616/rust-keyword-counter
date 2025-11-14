@@ -58,6 +58,7 @@ fn parse_args(args: &[String]) -> (&str, OutputFormat, Language, Option<String>)
             "ruby" | "rb" => Language::Ruby,
             "go" | "golang" => Language::Golang,
             "python" | "py" => Language::Python,
+            "dart" => Language::Dart,
             _ => Language::Rust,
           };
           i += 2;
@@ -98,7 +99,7 @@ fn print_help() {
   println!("    <PATH>    Directory, file, or Git URL (GitHub/GitLab) to analyze [default: .]");
   println!();
   println!("OPTIONS:");
-  println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, js, ts, ruby, rb, go, golang, python, py]");
+  println!("    -l, --language <LANG>    Language to analyze [default: rust] [possible values: rust, rs, js, ts, ruby, rb, go, golang, python, py, dart]");
   println!("    -f, --format <FORMAT>    Output format [default: plain] [possible values: plain, json, csv, html, graph]");
   println!("    -o, --output <FILE>      Output file path (for json, csv, html, graph formats)");
   println!("    -h, --help               Print help information");
@@ -109,6 +110,7 @@ fn print_help() {
   println!("    keyword-analyzer --language ruby lib/");
   println!("    keyword-analyzer --language go cmd/");
   println!("    keyword-analyzer --language python src/");
+  println!("    keyword-analyzer --language dart lib/");
   println!("    keyword-analyzer -l ts github.com/microsoft/typescript");
   println!("    keyword-analyzer -l py github.com/psf/requests");
   println!("    keyword-analyzer -l rs gitlab.com/gitlab-org/gitlab");

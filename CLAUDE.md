@@ -1,6 +1,6 @@
 # Multi-Language Keyword Analyzer
 
-A comprehensive keyword analysis tool supporting 5 programming languages with both CLI and API Server interfaces.
+A comprehensive keyword analysis tool supporting 6 programming languages with both CLI and API Server interfaces.
 
 ## Architecture
 
@@ -67,6 +67,10 @@ cargo run --bin keyword-analyzer -- -l golang
 # Analyze Python code
 cargo run --bin keyword-analyzer -- --language python
 cargo run --bin keyword-analyzer -- -l py
+
+# Analyze Dart code
+cargo run --bin keyword-analyzer -- --language dart
+cargo run --bin keyword-analyzer -- -l dart
 ```
 
 ### Basic Usage
@@ -85,12 +89,14 @@ cargo run --bin keyword-analyzer -- --language rust src/main.rs
 cargo run --bin keyword-analyzer -- --language js app.ts
 cargo run --bin keyword-analyzer -- --language ruby app.rb
 cargo run --bin keyword-analyzer -- --language go main.go
+cargo run --bin keyword-analyzer -- --language dart lib/main.dart
 
 # Analyze GitHub repositories
 cargo run --bin keyword-analyzer -- --language rust https://github.com/rust-lang/rust
 cargo run --bin keyword-analyzer -- --language js https://github.com/microsoft/typescript
 cargo run --bin keyword-analyzer -- --language ruby https://github.com/rails/rails
 cargo run --bin keyword-analyzer -- --language go https://github.com/golang/go
+cargo run --bin keyword-analyzer -- --language dart https://github.com/flutter/flutter
 ```
 
 ### Output Formats
@@ -180,7 +186,7 @@ Response:
 ```json
 {
   "success": true,
-  "data": ["rust", "javascript", "ruby", "go", "python"],
+  "data": ["rust", "javascript", "ruby", "go", "python", "dart"],
   "error": null
 }
 ```
@@ -247,9 +253,14 @@ Response Format:
 - **Keywords Tracked**: 75+ keywords including built-in functions, exceptions, and Python 3.x features
 - **Skip Directories**: `__pycache__/`, `.venv/`, `venv/`, `env/`, `.git/`, `target/`, `node_modules/`
 
+### Dart
+- **File Extensions**: `.dart`
+- **Keywords Tracked**: 75+ keywords including reserved words, built-in types, and language features
+- **Skip Directories**: `.dart_tool/`, `build/`, `.pub/`, `.git/`, `target/`, `node_modules/`
+
 ## Features
 
-- **Multi-language support**: Rust, TypeScript/JavaScript, Ruby, Go, and Python analysis
+- **Multi-language support**: Rust, TypeScript/JavaScript, Ruby, Go, Python, and Dart analysis
 - **Comprehensive keyword tracking**: Latest language specifications supported
 - **Recursive directory scanning** with intelligent directory skipping
 - **Multiple output formats** (Plain, JSON, CSV, HTML, SVG Graph) for integration with other tools
@@ -337,7 +348,7 @@ docker compose exec rust-dev cargo test -p keyword-analyzer-api
 ```
 
 The test suite includes:
-- **40+ unit tests** covering all major functionality
+- **50+ unit tests** covering all major functionality
 - **Language-specific tests** for all supported languages
 - **Edge case testing** for error handling and input validation
 - **Shared library tests** for core analysis engine

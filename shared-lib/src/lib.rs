@@ -3,6 +3,7 @@ use std::fs;
 use std::io::Write;
 use std::process::Command;
 
+pub mod dart;
 pub mod golang;
 pub mod javascript;
 pub mod python;
@@ -27,6 +28,7 @@ pub enum Language {
   Ruby,
   Golang,
   Python,
+  Dart,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -95,6 +97,7 @@ impl KeywordAnalyzer {
       Language::Python => {
         python::analyze_directory(&actual_path, &mut total_counts, &mut file_count)
       }
+      Language::Dart => dart::analyze_directory(&actual_path, &mut total_counts, &mut file_count),
     };
 
     analysis_result?;
@@ -241,6 +244,7 @@ fn format_plain(
     Language::Ruby => "Ruby",
     Language::Golang => "Go",
     Language::Python => "Python",
+    Language::Dart => "Dart",
   };
 
   let mut output = String::new();
@@ -272,6 +276,7 @@ fn generate_default_filename(language: Language, extension: &str) -> String {
     Language::Ruby => "ruby",
     Language::Golang => "go",
     Language::Python => "python",
+    Language::Dart => "dart",
   };
 
   let timestamp = std::time::SystemTime::now()
@@ -357,6 +362,7 @@ fn write_html_to_file(
     Language::Ruby => "Ruby",
     Language::Golang => "Go",
     Language::Python => "Python",
+    Language::Dart => "Dart",
   };
 
   let total_keywords: usize = sorted_counts.iter().map(|(_, count)| **count).sum();
@@ -484,6 +490,7 @@ fn write_graph_to_file(
     Language::Ruby => "Ruby",
     Language::Golang => "Go",
     Language::Python => "Python",
+    Language::Dart => "Dart",
   };
 
   let total_keywords: usize = sorted_counts.iter().map(|(_, count)| **count).sum();
@@ -708,6 +715,7 @@ pub fn generate_html_content(
     Language::Ruby => "Ruby",
     Language::Golang => "Go",
     Language::Python => "Python",
+    Language::Dart => "Dart",
   };
 
   let total_keywords: usize = sorted_counts.iter().map(|(_, count)| **count).sum();
